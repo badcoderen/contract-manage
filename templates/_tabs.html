@@ -1,0 +1,10 @@
+{% if tab_bar %}
+<nav class="tabs no-print" aria-label="{{ tab_bar.title }}功能切换">
+  <span class="tabs-label">{{ tab_bar.title }}</span>
+  <div class="tabs-items">
+    {% for it in tab_bar.tabs %}
+      <a class="tab{% if it.active %} active{% endif %}" href="{{ it.url }}">{{ it.label }}</a>
+    {% endfor %}
+  </div>
+</nav>
+{% endif %}

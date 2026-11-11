@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+{% block title %}首页概览 · {{ app_title }}{% endblock %}
+{% block content %}
+<section class="org-banner">
+  <div class="org-banner-name">{{ company_name }}</div>
+  <div class="org-banner-sub">{{ app_title }} ｜ 经营概览</div>
+</section>
+
+{% if reimb %}
+<section class="panel reimb-strip">
+  <div class="sub-head">
+    <h3>我的费用报销情况</h3>
+    {% if is_approver and pending_count %}
+      <a class="btn btn-sm btn-primary" href="{{ url_for('reimb_approve') }}">有 {{ pending_count }} 笔待审批</a>
+    {% endif %}
+    <a class="btn btn-sm" href="{{ url_for('reimb_my') }}">查看明细</a>
+  </div>
+  <div class="kv">
+    <div><span>预支未核销余额</span><b>{{ money(reimb.advance_balance) }}</b></div>
+    <div><span>待审批</span><b>{{ money(reimb.pending) }}</b></div>
+    <div><span>已批准待打款</span><b>{{ money(reimb.approved) }}</b></div>
+    <div><span>已打款</span><b>{{ money(reimb.paid) }}</b></div>
+    <div><span>已驳回</span><b>{{ money(reimb.rejected) }}</b></div>
+  </div>
+</section>
+{% endif %}
+
+<h2 class="page-title">经营概览</h2>
+
+<div class="cards">
+  <div class="card"><div class="card-label">收入合同额</div><div class="card-value">{{ money(d.contract_income) }}</div></div>
+  <div class="card"><div class="card-label">费用合计</div><div class="card-value">{{ money(d.cost_total) }}</div></div>
+  <div class="card card-hl"><div class="card-label">预计毛利</div><div class="card-value">{{ money(d.profit) }}</div>
+    <div class="card-foot">毛利率 {{ percent(d.profit_rate) }}</div></div>
+</div>
+
+<div class="cards">
+  <div class="card"><div class="card-label">项目数</div><div class="card-value">{{ d.projects }}</div></div>
+  <div class="card"><div class="card-label">往来单位</div><div class="card-value">{{ d.units }}</div></div>
+  <div class="card"><div class="card-label">合同数</div><div class="card-value">{{ d.contracts }}</div></div>
+  <div class="card"><div class="card-label">发票张数</div><div class="card-value">{{ d.invoices }}</div></div>
+</div>
+
+<div class="cards">
+  <div class="card"><div class="card-label">累计收款</div><div class="card-value">{{ money(d.received) }}</div></div>
+  {# 累计付款 = 付款记录（支出方向）+ 费用支出里「已付金额」的合计 #}
+  <div class="card"><div class="card-label">累计付款</div><div class="card-value">{{ money(d.paid_out) }}</div>
+    <div class="card-foot">付款记录 {{ money(d.pay_rec_out) }} ＋ 费用已付 {{ money(d.cost_paid) }}</div></div>
+  <div class="card"><div class="card-label">销项已开票合计</div><div class="card-value">{{ money(d.invoice_sale) }}</div>
+    <div class="card-foot">只算开给客户的销项票，不含进项</div></div>
+  <div class="card"><div class="card-label">已核销 / 未结清发票</div>
+    <div class="card-value">{{ money(d.invoice_settled) }}</div>
+    <div class="card-foot">{{ d.invoice_open }} 张未结清</div></div>
+</div>
+
+<section class="panel" style="margin-top:16px">
+  <div class="sub-head">
+    <h3>按项目经营情况</h3>
+    <a class="btn btn-sm" href="{{ url_for('query_view', key='project_cost') }}">项目成本汇总台账</a>
+  </div>
+  {% if d.scoped %}
+    <div class="note note-warn">数据范围受限：这里只统计「你负责的项目」与「管理员指定给你的项目」。</div>
+  {% endif %}
+  <p class="hint">
+    一行一个项目：收入 − 支出 − 费用 = 预计毛利；
+    累计收款＝「付款记录」里收入方向的收款；<b>累计付款＝「付款记录」里支出方向的付款 ＋
+    「费用支出」里已付金额的合计</b>（所以费用只要标了已付就会算进来，不用再单独录付款记录）；
+    未结清发票＝价税合计还没被核销完、且状态不是「已收讫」的张数（作废票不算）；
+    <b>销项已开票合计＝开给客户的销项发票价税合计</b>（不含进项票、不含作废票）；
+    <b>未开票合计＝收入合同额 − 销项已开票合计</b>，就是「还该开、还没开」的票面金额
+    （负数说明开票超过了合同额：多半是合同没录全，或者票挂错了项目）；
+    <b>点项目名称</b>可以打开这个项目的「项目全景」：合同、销项 / 进项发票、
+    收付款、按类别汇总的费用和利润一次看完。
+    <br><b>收入怎么算</b>：有收入合同就按合同额；<b>没录收入合同的项目</b>（比如「日常经营」）
+    按<u>已开的销项发票额</u>算，连发票也没有就按<u>累计收款</u>算 —— 这类项目会标 ✳，
+    所以「收入合同额 0」也可能有毛利，不是算错。
+  </p>
+  <div class="table-wrap">
+  <table class="grid">
+    <thead>
+      <tr>
+        <th>项目编号</th><th>项目名称</th>
+        <th class="num">项目预算</th>
+        <th class="num">收入合同额</th>
+        <th class="num">累计收款</th>
+        <th class="num">费用合计</th>
+        <th class="num">销项已开票<br>合计</th><th class="num">未开票<br>合计</th><th class="num">未结清<br>发票(张)</th>
+        <th class="num">预计毛利</th><th class="num">毛利率</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in d.by_project %}
+      <tr>
+        <td>
+          {% if r.id %}<a href="{{ url_for('project_profile', rid=r.id) }}"
+             title="打开项目全景：合同 / 发票 / 收付款 / 费用类别 / 利润">{{ r.code or '' }}</a>
+          {% else %}<span class="muted">{{ r.code or '—' }}</span>{% endif %}
+        </td>
+        <td>
+          {% if r.id %}<a href="{{ url_for('project_profile', rid=r.id) }}"
+             title="打开项目全景：合同 / 发票 / 收付款 / 费用类别 / 利润">{{ r.name }}</a>
+          {% else %}{{ r.name }}{% endif %}{% if r.income_fallback %}<span class="fb-mark"
+              title="这个项目没有收入合同，毛利里的收入按已开销项发票（没有发票按累计收款）算">✳</span>{% endif %}
+        </td>
+        <td class="num">{{ money(r.budget) }}</td>
+        <td class="num">{{ money(r.income) }}</td>
+        <td class="num">{{ money(r.received) }}</td>
+        <td class="num">{{ money(r.cost_total) }}</td>
+        <td class="num">{{ money(r.invoice_sale) }}</td>
+        <td class="num"{% if r.uninvoiced < 0 %} title="开票金额超过了收入 —— 多半是合同没录全，或开了票没挂合同"{% endif %}>{{ money(r.uninvoiced) }}</td>
+        <td class="num">{{ r.invoice_open }}</td>
+        <td class="num"><b>{{ money(r.profit) }}</b></td>
+        <td class="num">{{ percent(r.profit_rate) }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="11" class="empty">还没有项目，请先到「项目管理」新增</td></tr>
+      {% endfor %}
+    </tbody>
+    {% if d.by_project %}
+    <tfoot>
+      <tr style="background:#f7f9fb;font-weight:600">
+        <td colspan="2">合计（{{ d.by_project | length }} 个）</td>
+        <td class="num">{{ money(d.totals.budget) }}</td>
+        <td class="num">{{ money(d.totals.income) }}</td>
+        <td class="num">{{ money(d.totals.received) }}</td>
+        <td class="num">{{ money(d.totals.cost_total) }}</td>
+        <td class="num">{{ money(d.totals.invoice_sale) }}</td>
+        <td class="num">{{ money(d.totals.uninvoiced) }}</td>
+        <td class="num">{{ d.totals.invoice_open }}</td>
+        <td class="num">{{ money(d.totals.profit) }}</td>
+        <td class="num">{{ percent(d.totals.profit_rate) }}</td>
+      </tr>
+    </tfoot>
+    {% endif %}
+  </table>
+  </div>
+</section>
+
+<div class="two-col">
+  <section class="panel">
+    <h3>最近录入的合同</h3>
+    <div class="table-wrap">
+    <table class="grid">
+      <thead><tr><th>合同编号</th><th>合同名称</th><th>所属项目</th><th class="num">合同金额</th><th>状态</th></tr></thead>
+      <tbody>
+      {% for r in d.recent_contracts %}
+        <tr><td>{{ r.code }}</td><td>{{ r.name }}</td><td>{{ r.project_name or '' }}</td>
+            <td class="num">{{ money(r.amount_gross) }}</td><td>{{ r.status or '' }}</td></tr>
+      {% else %}
+        <tr><td colspan="5" class="empty">暂无数据</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h3>项目预计毛利排行</h3>
+    <div class="table-wrap">
+    <table class="grid">
+      <thead><tr><th>项目编号</th><th>项目名称</th><th class="num">预计毛利</th></tr></thead>
+      <tbody>
+      {% for r in d.top_projects %}
+        <tr><td>{{ r.code }}</td><td>{{ r.name }}</td><td class="num">{{ money(r.profit) }}</td></tr>
+      {% else %}
+        <tr><td colspan="3" class="empty">暂无数据</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<div id="reimbModal" class="modal-mask" hidden>
+  <div class="modal">
+    <div class="modal-head">
+      <h3>费用报销情况</h3>
+      <button class="modal-x" type="button" onclick="closeReimb()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="kv">
+        <div><span>预支未核销余额</span><b>{{ money(reimb.advance_balance) }}</b></div>
+        <div><span>待审批</span><b>{{ money(reimb.pending) }}</b></div>
+        <div><span>已批准待打款</span><b>{{ money(reimb.approved) }}</b></div>
+        <div><span>已打款</span><b>{{ money(reimb.paid) }}</b></div>
+      </div>
+      {% if adv %}
+        <h4 class="modal-sub">我收到的预支款</h4>
+        <div class="table-wrap">
+        <table class="grid">
+          <thead><tr><th>预支单号</th><th>打款日期</th><th class="num">预支金额</th>
+            <th class="num">已核销</th><th class="num">可用余额</th></tr></thead>
+          <tbody>
+          {% for r in adv %}
+            <tr><td>{{ r.code or '' }}</td><td>{{ r.pay_date or '' }}</td>
+              <td class="num">{{ money(r.amount) }}</td>
+              <td class="num">{{ money(r.used) }}</td>
+              <td class="num"><b>{{ money(r.balance) }}</b></td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        </div>
+      {% endif %}
+      {% if reimb_rows %}
+        <h4 class="modal-sub">最近报销记录</h4>
+        <div class="table-wrap">
+        <table class="grid">
+          <thead><tr><th>日期</th><th>摘要</th><th class="num">金额</th>
+            <th>方式</th><th>状态</th></tr></thead>
+          <tbody>
+          {% for r in reimb_rows %}
+            <tr><td>{{ r.cost_date or '' }}</td>
+              <td>{{ r.summary or r.category or '' }}</td>
+              <td class="num">{{ money(r.amount) }}</td>
+              <td>{{ r.settle_type or '' }}</td>
+              <td><span class="tag {% if r.approval_status in ('已批准','已打款') %}tag-ok{% elif r.approval_status == '待审批' %}tag-warn{% elif r.approval_status == '已驳回' %}tag-danger{% endif %}">{{ r.approval_status or '' }}</span></td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        </div>
+      {% else %}
+        <p class="muted small">还没有报销记录。</p>
+      {% endif %}
+    </div>
+    <div class="modal-foot">
+      <a class="btn" href="{{ url_for('reimb_my') }}">打开「我的费用报销」</a>
+      <button class="btn btn-primary" type="button" onclick="closeReimb()">知道了</button>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  var KEY = "reimbPopupShown";
+  try {
+    if (sessionStorage.getItem(KEY)) return;      // 本次浏览器会话只弹一次
+    sessionStorage.setItem(KEY, "1");
+  } catch (e) { /* 隐私模式下仅本次显示 */ }
+  var m = document.getElementById("reimbModal");
+  if (m) { m.hidden = false; document.body.classList.add("modal-open"); }
+})();
+function closeReimb() {
+  var m = document.getElementById("reimbModal");
+  if (m) m.hidden = true;
+  document.body.classList.remove("modal-open");
+}
+</script>
+{% endblock %}

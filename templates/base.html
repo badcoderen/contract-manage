@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="csrf-token" content="{{ csrf_token() }}">
+<title>{% block title %}{{ app_title }}{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css', v=asset_ver('app.css')) }}">
+</head>
+<body>
+<header class="topbar no-print">
+  <button class="navtoggle" type="button" onclick="document.body.classList.toggle('nav-open')">菜单</button>
+  <div class="brand" title="{{ app_subtitle }}">
+    <span class="brand-name">{{ company_name }}</span>
+    <span class="brand-sub">{{ app_title }}<span class="brand-ver">v{{ app_version }}</span></span>
+  </div>
+  <div class="topbar-right">
+    {% if cur_user %}
+      <span class="user topbar-aux">{{ cur_user }}</span>
+      <span class="tag topbar-aux {% if is_admin %}tag-admin{% endif %}">{{ ROLE_LABELS.get(cur_role, cur_role) }}</span>
+      <a class="btn btn-ghost btn-sm topbar-aux" href="{{ url_for('password') }}">修改密码</a>
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('logout') }}">退出</a>
+    {% endif %}
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar no-print">
+    {% if cur_user %}
+    <div class="side-user">
+      <div class="side-user-row">
+        <span class="side-user-name">{{ cur_user }}</span>
+        <span class="tag {% if is_admin %}tag-admin{% endif %}">{{ ROLE_LABELS.get(cur_role, cur_role) }}</span>
+      </div>
+      <a class="nav-item" href="{{ url_for('password') }}">修改密码</a>
+      <a class="nav-item" href="{{ url_for('logout') }}">退出登录</a>
+    </div>
+    {% endif %}
+    <nav>
+      <a class="nav-item {% if request.path == '/' %}active{% endif %}" href="{{ url_for('index') }}">首页概览</a>
+      {% for gname, items in nav_groups %}
+        <div class="nav-group">{{ gname }}</div>
+        {% for kind, nkey, ntitle in items %}
+          {% if kind == 'q' %}
+            <a class="nav-item {% if request.path == '/q/' ~ nkey %}active{% endif %}" href="{{ url_for('query_view', key=nkey) }}">{{ ntitle }}</a>
+          {% elif kind == 'r' %}
+            <a class="nav-item {% if request.path == '/r/' ~ nkey %}active{% endif %}" href="{{ url_for('report_view', key=nkey) }}">{{ ntitle }}</a>
+          {% elif kind == 'u' %}
+            <a class="nav-item {% if request.path.startswith('/users') and (nkey == 'users') == (not request.path.startswith('/users/logs')) %}active{% endif %}"
+               href="{% if nkey == 'logs' %}{{ url_for('user_logs') }}{% else %}{{ url_for('user_list') }}{% endif %}">{{ ntitle }}</a>
+          {% elif kind == 't' %}
+            <a class="nav-item {% if tab_bar and tab_bar.key == nkey %}active{% endif %}"
+               href="{{ url_for('tab_group', group=nkey) }}">{{ ntitle }}</a>
+          {% elif kind == 'p' %}
+            {% set p = PAGES.get(nkey) %}
+            {% if p %}
+              <a class="nav-item {% if request.path == NAV_PATH.get(nkey, '') %}active{% endif %}"
+                 href="{{ url_for(p.endpoint) }}">{{ ntitle }}</a>
+            {% endif %}
+          {% else %}
+            <a class="nav-item {% if request.path.startswith('/e/' ~ nkey) %}active{% endif %}" href="{{ url_for('entity_list', key=nkey) }}">{{ ntitle }}</a>
+          {% endif %}
+        {% endfor %}
+      {% endfor %}
+    </nav>
+  </aside>
+
+  <main class="content">
+    {% with msgs = get_flashed_messages(with_categories=true) %}
+      {% if msgs %}
+        <div class="flashes no-print">
+          {% for cat, m in msgs %}
+            <div class="flash flash-{{ cat }}">{{ m }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+    {% if read_only_page %}
+      <div class="note note-quiet no-print">
+        这个页面对你的账号是<b>只读</b>：可以查看，但不能新增 / 修改 / 删除。需要改动请找管理员。
+      </div>
+    {% endif %}
+    {# 属于某个「选项卡组」的页面会自动带上一排选项卡（详见 _tabs.html）。
+       放在这里的好处：所有页面统一生效，子模板不用各写一遍。 #}
+    {% include "_tabs.html" %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+
+<script src="{{ url_for('static', filename='app.js', v=asset_ver('app.js')) }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

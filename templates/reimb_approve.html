@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}报销审批与打款 · {{ app_title }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h2 class="page-title">报销审批与打款</h2>
+  <div class="page-actions">
+    <a class="btn" href="{{ url_for('query_view', key='reimb_ledger') }}">报销台账</a>
+    <a class="btn" href="{{ url_for('entity_list', key='advances') }}">预支打款</a>
+  </div>
+</div>
+<div class="note">
+  待审批共 <b>{{ rows|length }}</b> 笔。流程：<b>批准</b> → <b>打款</b>。
+  驳回时可在「审批意见」里写明原因，报销人会看到。
+</div>
+
+<div class="table-wrap">
+<table class="grid">
+  <thead>
+    <tr><th>费用单号</th><th>发生日期</th><th>报销人</th><th>项目</th><th>费用类别</th>
+      <th>摘要</th><th class="num">金额</th><th>报销方式</th><th class="ops-col">操作</th></tr>
+  </thead>
+  <tbody>
+  {% for r in rows %}
+    <tr>
+      <td><a href="{{ url_for('entity_edit', key='costs', rid=r.id) }}">{{ r.code or '' }}</a></td>
+      <td>{{ r.cost_date or '' }}</td>
+      <td>{{ r.employee_name or '' }}</td>
+      <td>{{ r.project_name or '' }}</td>
+      <td>{{ r.category or '' }}</td>
+      <td>{{ r.summary or '' }}{% if r.memo %}<div class="muted small">{{ r.memo }}</div>{% endif %}</td>
+      <td class="num"><b>{{ money(r.amount) }}</b></td>
+      <td>{{ r.settle_type or '' }}</td>
+      <td class="ops-col">
+        {% if is_approver %}
+        <form method="post" action="{{ url_for('reimb_action', rid=r.id, action='approve') }}" class="inline">
+          <input type="text" name="memo" placeholder="审批意见（可空）" class="ops-memo">
+          <button class="btn btn-sm btn-primary" type="submit">批准</button>
+        </form>
+        <form method="post" action="{{ url_for('reimb_action', rid=r.id, action='reject') }}" class="inline">
+          <button class="btn btn-sm btn-danger" type="submit">驳回</button>
+        </form>
+        {% if is_finance %}
+        <form method="post" action="{{ url_for('reimb_action', rid=r.id, action='pay') }}" class="inline"
+              onsubmit="return confirm('确认已向 {{ r.employee_name }} 打款 {{ money(r.amount) }}？');">
+          <button class="btn btn-sm" type="submit">标记已打款</button>
+        </form>
+        {% endif %}
+        {% else %}<span class="muted small">只读</span>{% endif %}
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="9" class="empty">当前没有待审批的报销单</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<p class="muted small">
+  说明：管理员/财务自己录入的费用会直接记为「已批准」，不会出现在这里；
+  只有员工提交的单据需要审批。{% if not is_finance %}「标记已打款」由<b>财务</b>执行，
+  这里不显示。{% endif %}打款后状态变为「已打款」，员工侧会看到。
+</p>
+{% endblock %}

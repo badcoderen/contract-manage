@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}数据备份 · {{ app_title }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h2 class="page-title">数据备份</h2>
+  <div class="page-actions">
+    <form method="post" action="{{ url_for('backup_run') }}" class="inline"
+          onsubmit="return confirm('现在做一次备份？\n\n存到：{{ bk.dir }}\n备份期间不用停服务，几秒钟就好。');">
+      <input type="hidden" name="dir" value="{{ bk.dir }}">
+      <button class="btn btn-primary" type="submit">立即备份</button>
+    </form>
+  </div>
+</div>
+
+<div class="note">
+  <b>一键备份</b>会把「数据库 + 附件」打包存到飞牛的备份目录里，
+  备份时<b>不用停系统</b>，拿到的是一致快照（含完整性校验与逐表行数清单）。
+  备份文件在容器外面（就是飞牛上的一个普通文件夹），可以直接拷走、拷到移动硬盘或网盘。
+</div>
+
+<section class="panel">
+  <div class="kv">
+    <div><span>备份位置</span><b class="mono-sm">{{ bk.dir }}</b></div>
+    <div><span>状态</span>
+      {% if bk.state.ok %}<b class="ok-text">可以写</b>
+        {% if not bk.state.exists %}（还没有，第一次备份时自动建）{% endif %}
+      {% else %}<b class="bad-text">不可用</b>{% endif %}
+    </div>
+    <div><span>保留份数</span><b>最近 {{ bk.keep }} 份</b>（超出的自动删旧）</div>
+    <div><span>已有备份</span><b>{{ bk.files|length }}</b> 份</div>
+    {% if bk.files %}
+    <div><span>最近一次</span><b>{{ bk.files[0].mtime }}</b></div>
+    {% endif %}
+  </div>
+  {% if not bk.state.ok %}
+  <p class="hint bad-text">
+    这个位置现在写不了：{{ bk.state.err }}<br>
+    飞牛上要先把宿主目录挂进容器（<code>docker-compose.yml</code> 的
+    <code>volumes</code> 里加 <code>- /vol1/1000/backup:/backup</code>），
+    再重建容器。默认目录是 <code>{{ bk.default }}</code>，允许写入的根目录是
+    <code>{{ bk.roots|join('、') }}</code>。
+  </p>
+  {% endif %}
+</section>
+
+<section class="panel" style="margin-top:16px">
+  <h3>换个位置备份（可选）</h3>
+  <p class="hint">
+    默认就备到上面那个「存储空间1」的目录。<b>要备到别的地方</b>，
+    可以在下面选或直接填一个路径 —— 只能填在这几个根目录底下：
+    <code>{{ bk.roots|join('、') }}</code>；<b>填一个还不存在的文件夹会自动创建</b>。
+    想加到别的硬盘（比如存储空间2），把那个目录也挂进容器即可（compose 里有示例）。
+  </p>
+  <form method="get" action="{{ url_for('backup_page') }}" class="form-actions">
+    <label class="muted small" for="dir">备份到</label>
+    <input type="text" id="dir" name="dir" list="bkdirs" value="{{ bk.dir }}"
+           class="dir-input">
+    <datalist id="bkdirs">
+      {% for t in bk.targets %}<option value="{{ t }}"></option>{% endfor %}
+    </datalist>
+    <button class="btn" type="submit">切换到这个位置</button>
+    {% if bk.dir != bk.default %}
+    <a class="btn btn-ghost" href="{{ url_for('backup_page', dir=bk.default) }}">回到默认位置</a>
+    {% endif %}
+  </form>
+</section>
+
+<section class="panel" style="margin-top:16px">
+  <h3>备份文件（<span class="mono-sm">{{ bk.dir }}</span>）</h3>
+  {% if bk.files %}
+  <div class="table-wrap card-wrap">
+    <table class="grid card-on-mobile">
+      <thead>
+        <tr><th>文件</th><th>备份时间</th><th class="num">大小</th><th class="ops-col">操作</th></tr>
+      </thead>
+      <tbody>
+      {% for f in bk.files %}
+        <tr>
+          <td data-label="文件"><span class="mono-sm">{{ f.name }}</span>
+            {% if loop.first %}<span class="tag tag-ok">最新</span>{% endif %}</td>
+          <td data-label="备份时间">{{ f.mtime }}</td>
+          <td class="num" data-label="大小">{{ f.size_h }}</td>
+          <td class="ops-col" data-label="操作">
+            <a class="btn btn-sm btn-primary"
+               href="{{ url_for('backup_download', dir=bk.dir, name=f.name) }}">下载到本机</a>
+            <form method="post" action="{{ url_for('backup_delete') }}" class="inline"
+                  onsubmit="return confirm('删掉这份备份？\n\n{{ f.name }}\n删除后无法恢复（库里数据不受影响）。');">
+              <input type="hidden" name="dir" value="{{ bk.dir }}">
+              <input type="hidden" name="name" value="{{ f.name }}">
+              <button class="btn btn-sm btn-ghost" type="submit">删除</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="hint">
+    「下载到本机」= 浏览器会让你自己选存在哪儿（下载到电脑、移动硬盘都行），
+    这样就有了<b>一份不在 NAS 上</b>的备份。
+  </p>
+  {% else %}
+  <p class="muted">这个位置还没有备份。点右上角【立即备份】就会生成第一份。</p>
+  {% endif %}
+</section>
+
+<section class="panel" style="margin-top:16px">
+  <h3>这次备份出去的是些什么（当前库里）</h3>
+  <div class="kv">
+    <div><span>项目</span><b>{{ bk.info.projects }}</b></div>
+    <div><span>合同</span><b>{{ bk.info.contracts }}</b></div>
+    <div><span>付款记录</span><b>{{ bk.info.payments }}</b></div>
+    <div><span>费用</span><b>{{ bk.info.costs }}</b></div>
+    <div><span>发票</span><b>{{ bk.info.invoices }}</b></div>
+    <div><span>核销明细</span><b>{{ bk.info.settlements }}</b></div>
+    <div><span>员工花名册</span><b>{{ bk.info.staff }}</b></div>
+    <div><span>工资表（行）</span><b>{{ bk.info.payroll }}</b></div>
+    <div><span>库文件大小</span><b>{{ bk.info.db_size_h }}</b></div>
+  </div>
+  <p class="hint">附件（上传的原件、点位图 PDF 等）也会一起打进备份包。</p>
+</section>
+
+<details class="panel" style="margin-top:16px">
+  <summary style="cursor:pointer;font-weight:600">万一真要恢复，怎么操作（点开看步骤）</summary>
+  <ol class="hint" style="margin-top:8px">
+    <li>在飞牛上解开备份包：<code>tar xzf contract-app_xxx.tgz -C /tmp/restore</code>
+        （里面是 <code>app.db</code>、<code>manifest.txt</code>、<code>uploads.tgz</code>）</li>
+    <li>停掉系统：<code>docker compose stop</code></li>
+    <li>把现有的 data 目录改名留底：<code>mv data data.broken.日期</code></li>
+    <li>建回 data 并把备份放进去：库放 <code>data/app.db</code>，
+        解开 <code>uploads.tgz</code> 得到 <code>data/uploads/</code></li>
+    <li>起系统：<code>docker compose up -d</code></li>
+    <li>对一下 <code>manifest.txt</code> 里的行数与系统里的数量是否一致</li>
+  </ol>
+  <p class="hint">
+    提醒：备份跟数据库在<b>同一块盘</b>（都在存储空间1）上，盘坏了会一起没。
+    建议定期点一次【下载到本机】，或者把备份目录改到别的存储空间，才算真正的保险。
+  </p>
+</details>
+{% endblock %}

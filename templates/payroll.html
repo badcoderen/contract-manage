@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+{% block title %}工资测算 · {{ app_title }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h2 class="page-title">工资测算 <span class="muted">/ {{ ym }}</span></h2>
+  <div class="page-actions">
+    <form class="search" method="get" action="{{ url_for('payroll') }}">
+      <select name="ym" onchange="this.form.submit()">
+        {% for m in months %}
+          <option value="{{ m }}" {% if m == ym %}selected{% endif %}>{{ m }}</option>
+        {% endfor %}
+      </select>
+    </form>
+    {% if pk.rows %}
+      {% if seal.finalized %}
+        <span class="tag tag-ok">{{ ym }} 已定稿</span>
+        {% if not next_n %}
+        <form method="post" action="{{ url_for('payroll_generate_next', ym=ym) }}"
+              class="inline"
+              onsubmit="return confirm('按已定稿的 {{ ym }} 生成 {{ next_ym }} 的草稿？\n\n► 工资标准 / 补贴 / 社保公积金 / 其他扣款照抄 {{ ym }}\n► 加班费 / 餐补 / 出差费 按 {{ next_ym }} 的考勤重算\n► 生成的是【草稿】：先看、逐人调整，核对完再点【本月工资定稿】\n\n确定吗？');">
+          <button class="btn btn-primary" type="submit">一键生成下月草稿（{{ next_ym }}）</button>
+        </form>
+        {% else %}
+          <span class="tag">下月 {{ next_ym }} 已生成</span>
+        {% endif %}
+      {% elif seal.sealed %}
+        <span class="tag tag-warn">{{ ym }} 后面的月份已定稿</span>
+      {% else %}
+        <span class="tag {% if manual_n %}tag-warn{% endif %}">
+          {% if manual_n %}已调整（{{ manual_n }} 人，未定稿）{% else %}草稿（未定稿）{% endif %}
+        </span>
+        <form method="post" action="{{ url_for('payroll_save', ym=ym) }}" class="inline"
+              onsubmit="return confirm('把 {{ ym }} 整月工资定稿？\n\n► 存下当前全部数字并锁定\n► 之后要改，需要【解除定稿】并输入登录密码\n\n确定吗？');">
+          <button class="btn btn-primary" type="submit">本月工资定稿</button>
+        </form>
+      {% endif %}
+    {% endif %}
+    <a class="btn" href="{{ url_for('export_payroll', ym=ym) }}">导出工资表 / 工资条</a>
+    {% if is_admin %}<a class="btn btn-ghost" href="{{ url_for('settings_page') }}">参数设置</a>{% endif %}
+  </div>
+</div>
+
+{% if seal.finalized %}
+<div class="note">
+  <b>{{ ym }} 已定稿</b>
+  <span class="muted small">（{{ seal.actor or '—' }} · {{ seal.finalized_at or '' }}）</span>。
+  要修改请先<b>解除定稿</b> —— 需要输入你的登录密码：
+  <form method="post" action="{{ url_for('payroll_unfinalize', ym=ym) }}"
+        style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center">
+    <input type="password" name="password" required autocomplete="current-password"
+           placeholder="输入登录密码"
+           style="flex:0 0 200px;padding:6px 10px;border:1px solid #e0cfa6;border-radius:6px;font-size:13px">
+    <input type="text" name="note" maxlength="120" placeholder="备注（可选，例如：漏记加班）"
+           style="flex:1 1 240px;min-width:180px;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px">
+    <button class="btn" type="submit">解除定稿</button>
+  </form>
+</div>
+{% elif seal.sealed %}
+<div class="note note-warn">
+  <b>{{ ym }} 后面的月份已经定稿</b>，本月不能再改。
+  要改这个月，请先到后面的月份【解除定稿】（需要输入登录密码）。
+</div>
+{% endif %}
+
+<div class="note">
+  <b>计薪天数</b>：本月 <b>{{ pk.month_days }}</b> 天 =
+  「周一至周六」− 法定假日 + 调休上班日（清单在参数设置里维护；<b>不含加班</b>）；
+  日工资 = 基础工资 ÷ {{ pk.month_days }}；小时工资 = 日工资 ÷ {{ pk.params.hours_per_day }}。
+  <br>
+  <b>加班费</b> = 加班时数 × 小时工资 × {{ pk.params.ot_rate_weekday }}（周日
+  {{ pk.params.ot_rate_weekend }} 倍）；<b>加班时数可在【调整】里直接填</b>，不用先提加班申请。
+  <b>请假扣款</b> = 请假天数 × 日工资 × {{ pk.params.leave_deduct_rate }}。
+  <br>
+  <b>出差费</b> = 出差天数 × {{ '日工资' if pk.params.trip_pay_mode == 'daily' else money(pk.params.trip_allowance_per_day) ~ ' 元/天' }}（调整里可直录出差天数；口径在参数 trip_pay_mode 里切）；
+  <b>餐补</b> =（计薪天数 + 加班满 {{ pk.params.hours_per_day }} 小时的整天数）×
+  {{ money(pk.params.meal_office_per_day) }} + 出差（含出海）天数 × {{ money(pk.params.meal_trip_per_day) }}。
+  <br>
+  <b>高温补贴</b>：{{ pk.params.heat_months | sort | join('、') }} 月每人每月
+  {{ money(pk.params.heat_allow_per_month) }} 元；
+  <b>福利金</b>：只在端午 / 中秋所在月（{{ pk.params.welfare_months | join('、') or '未设置' }}）。
+  <br>
+  <b>社保个人部分</b>：养老 {{ (pk.params.pension_rate * 100) | round(1) }}% +
+  医疗 {{ (pk.params.medical_rate * 100) | round(1) }}% +
+  失业 {{ (pk.params.unemploy_rate * 100) | round(2) }}% × 缴费基数，大病补充 {{ pk.params.serious_ill_fixed }} 元定额；
+  <b>个税</b>按累计预扣法（起征点 {{ pk.params.tax_threshold }} 元/月 + 各人专项附加扣除）。
+  {% if is_admin %}所有比例与标准都能在「参数设置」里改。{% endif %}
+</div>
+
+{% if not pk.rows %}
+<div class="note note-warn">
+  花名册里还没有员工。请先到「员工花名册」录入 —— <b>不用本系统的员工也能录</b>，
+  只要填好姓名与工资标准，就能参与测算并导出工资表。
+</div>
+{% endif %}
+
+<div class="kv">
+  <div><span>发薪人数</span><b>{{ pk.rows | length }}</b></div>
+  <div><span>应发合计</span><b>{{ money(pk.totals.gross) }}</b></div>
+  <div><span>扣款合计</span><b>{{ money(pk.totals.deduct_total) }}</b></div>
+  <div><span>其中个税</span><b>{{ money(pk.totals.tax) }}</b></div>
+  <div><span>实发合计</span><b>{{ money(pk.totals.net) }}</b></div>
+</div>
+
+<div class="table-wrap">
+<table class="grid">
+  <thead>
+    <tr>
+      <th class="idx">#</th>
+      <th style="width:7%">工号</th>
+      <th style="width:8%">姓名</th>
+      <th style="width:7%">部门</th>
+      <th class="num">基础工资</th>
+      <th class="num">岗位津贴</th>
+      <th class="num">加班费</th>
+      <th class="num">加班(时)</th>
+      <th class="num">出差补贴</th>
+      <th class="num">餐补</th>
+      <th class="num">应发小计</th>
+      <th class="num">社保</th>
+      <th class="num">公积金</th>
+      <th class="num">个税</th>
+      <th class="num">扣款小计</th>
+      <th class="num">实发工资</th>
+      <th class="idx">状态</th>
+      <th class="ops-col">操作</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in pk.rows %}
+    <tr>
+      <td class="idx">{{ loop.index }}</td>
+      <td>{{ r.emp_no }}</td>
+      <td>{{ r.name }}
+        {%- if r.leaver %} <span class="tag tag-warn">离职折算</span>
+        {%- elif r.stopped %} <span class="tag">已停用</span>{% endif %}
+        {%- if r.leave_note %}<div class="muted small">{{ r.leave_note }}</div>{% endif %}
+      </td>
+      <td class="muted">{{ r.dept }}</td>
+      <td class="num">{{ money(r.base_salary) }}</td>
+      <td class="num">{{ money(r.post_salary) }}</td>
+      <td class="num">{{ money(r.overtime) }}</td>
+      <td class="num muted">{{ r.ot_hours | num }}</td>
+      <td class="num">{{ money(r.trip_allow) }}</td>
+      <td class="num">{{ money(r.meal_allow) }}</td>
+      <td class="num"><b>{{ money(r.gross) }}</b></td>
+      <td class="num">{{ money(r.pension + r.medical + r.serious_ill + r.unemployment) }}</td>
+      <td class="num">{{ money(r.fund) }}</td>
+      <td class="num">{{ money(r.tax) }}</td>
+      <td class="num">{{ money(r.deduct_total) }}</td>
+      <td class="num"><b>{{ money(r.net) }}</b></td>
+      <td class="idx">
+        {% if seal.finalized %}<span class="tag tag-ok">已定稿</span>
+        {% elif r.manual %}<span class="tag tag-warn">已调整</span>
+        {% else %}<span class="tag">测算中</span>{% endif %}
+      </td>
+      <td class="ops-col">
+        {% if seal.editable %}
+          <a class="btn btn-sm" href="{{ url_for('payroll_edit', ym=ym, sid=r.staff_id) }}">调整</a>
+        {% else %}
+          <span class="muted small">{% if seal.finalized %}已定稿{% else %}不可改{% endif %}</span>
+        {% endif %}
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="18" class="empty">还没有员工，请先到「员工花名册」录入</td></tr>
+  {% endfor %}
+  </tbody>
+  {% if pk.rows %}
+  <tfoot>
+    <tr style="background:#f7f9fb;font-weight:600">
+      <td colspan="4">合计</td>
+      <td class="num">{{ money(pk.totals.base_salary) }}</td>
+      <td class="num">{{ money(pk.totals.post_salary) }}</td>
+      <td class="num">{{ money(pk.totals.overtime) }}</td>
+      <td></td>
+      <td class="num">{{ money(pk.totals.trip_allow) }}</td>
+      <td class="num">{{ money(pk.totals.meal_allow) }}</td>
+      <td class="num">{{ money(pk.totals.gross) }}</td>
+      <td class="num">{{ money(pk.totals.pension + pk.totals.medical + pk.totals.serious_ill + pk.totals.unemployment) }}</td>
+      <td class="num">{{ money(pk.totals.fund) }}</td>
+      <td class="num">{{ money(pk.totals.tax) }}</td>
+      <td class="num">{{ money(pk.totals.deduct_total) }}</td>
+      <td class="num">{{ money(pk.totals.net) }}</td>
+      <td colspan="2"></td>
+    </tr>
+  </tfoot>
+  {% endif %}
+</table>
+</div>
+
+{# 操作按钮统一放在页面顶部，页面底部不再重复放一组 #}
+
+<p class="muted small">
+  说明：<b>流程</b> —— ① 在当月核对数字、逐人【调整】（只把这一行存下来，
+  显示“已调整”，<b>不等于整月定稿</b>）；
+  ② 全部核对完，点顶部 <b>【本月工资定稿】</b>，整月才变成“已定稿”；
+  ③ 已定稿要改，必须<b>输入登录密码【解除定稿】</b>；
+  ④ 已定稿后再点 <b>【一键生成下月草稿】</b>，下月是草稿，看完再定稿。
+  <br>
+  <b>整月按规则重算</b>（草稿月可用）：把本月所有人退回"没定稿"，按
+  「花名册标准 + 当月考勤 + 离职折算」重算 —— 手工调整会被覆盖，只在想推倒重来时用。
+  <br>
+  <b>定稿 / 一键生成下月草稿</b> 的按钮<b>只在页面顶部</b>一处，
+  底部不再重复。定稿或生成后<b>上个月自动封存</b>、不能再改；
+  确需修改要<b>填写原因解锁</b>（记审计）。
+  <br>
+  只统计<b>已批准</b>的加班 / 请假 / 出差，且只对花名册里<b>关联了登录账号</b>的员工自动汇总。
+  导出文件里含两个工作表：<b>工资表</b>（一行一人，便于核算）与
+  <b>工资条</b>（每人一块，含表头，打印后裁剪即可发放）。
+  <br>
+  <b>和「员工花名册」的关系</b>：花名册是发薪名单与工资标准的来源 ——
+  <b>新来的</b>在花名册加一行就行，下个月生成工资表时自动有他；
+  <b>离职的</b>把花名册状态改成「停用」并填上<b>【离职日期】</b>（别删这一行）。
+  填了离职日期之后系统会自动处理：<b>离职当月</b>按在职天数折算
+  （基础工资与岗位津贴按天算，出勤天数与餐补也只算到这一天），
+  <b>之后的月份</b>自动不再出现他，不用手工去工资表里删人。
+</p>
+
+{% if lock_log %}
+<p class="muted small">
+  <b>{{ ym }} 的定稿记录</b>：
+  {% for g in lock_log %}
+    <br>{{ g.at }} ·
+    {% if g.action == 'finalize' %}本月工资定稿{% elif g.action == 'unfinalize' %}解除定稿{% else %}{{ g.action }}{% endif %}
+    · {{ g.actor }}{% if g.reason %} · 备注：{{ g.reason }}{% endif %}
+  {% endfor %}
+</p>
+{% endif %}
+{% endblock %}

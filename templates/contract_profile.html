@@ -1,0 +1,322 @@
+{% extends "base.html" %}
+{% block title %}{{ p.c.code }} 合同全景 · {{ app_title }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h2 class="page-title">
+    <span class="muted">{{ p.c.code }}</span> {{ p.c.name }}
+  </h2>
+  <div class="page-actions">
+    <a class="btn" href="{{ url_for('entity_edit', key='contracts', rid=p.c.id) }}">编辑合同</a>
+    {% if p.files %}
+      <a class="btn" href="{{ url_for('contract_files', rid=p.c.id) }}">附件（{{ p.files|length }}）</a>
+    {% endif %}
+    <a class="btn" href="{{ url_for('entity_list', key='invoices', q=p.c.code) }}">发票列表</a>
+    <a class="btn" href="{{ url_for('entity_list', key='payments', q=p.c.code) }}">付款列表</a>
+    <a class="btn" href="{{ url_for('entity_list', key='contracts') }}">返回合同管理</a>
+  </div>
+</div>
+
+<div class="cards">
+  <div class="card">
+    <div class="card-label">合同金额（{{ p.c.direction or '—' }}）</div>
+    <div class="card-value">{{ money(p.amount) }}</div>
+    <div class="card-foot">清单合计 {{ money(p.item_amount) }}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">累计收款</div>
+    <div class="card-value">{{ money(p.pay_in) }}</div>
+    <div class="card-foot">收款占合同 {{ percent(p.pay_in / p.amount if p.amount else 0) }}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">累计付款</div>
+    <div class="card-value">{{ money(p.pay_out) }}</div>
+    <div class="card-foot">付款占合同 {{ percent(p.pay_out / p.amount if p.amount else 0) }}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">已开票（价税合计）</div>
+    <div class="card-value">{{ money(p.inv_gross) }}</div>
+    <div class="card-foot">已核销 {{ money(p.inv_settled) }}</div>
+  </div>
+</div>
+
+<div class="cards">
+  <div class="card">
+    <div class="card-label">未结清发票</div>
+    <div class="card-value">{{ p.inv_open_n }} 张</div>
+    <div class="card-foot">未结金额 {{ money(p.inv_open) }}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">已登记费用</div>
+    <div class="card-value">{{ money(p.item_cost) }}</div>
+    <div class="card-foot">费用支出里对应到本合同清单项的部分</div>
+  </div>
+  <div class="card card-hl">
+    <div class="card-label">我方利润（对私「扣税」）</div>
+    <div class="card-value">{{ money(p.p_profit) }}</div>
+    <div class="card-foot">
+      {% if p.priv %}来自 {{ p.priv|length }} 张对私计算单{% else %}还没有对私计算单{% endif %}
+    </div>
+  </div>
+  <div class="card card-hl">
+    <div class="card-label">返还居间人</div>
+    <div class="card-value">{{ money(p.p_payable) }}</div>
+    <div class="card-foot">
+      对私收入 {{ money(p.p_income) }} ／ 成本 {{ money(p.p_cost) }}
+    </div>
+  </div>
+</div>
+
+<section class="panel">
+  <div class="sub-head">
+    <h3>合同信息</h3>
+    <span class="muted small">粗略毛利（合同金额 − 已登记费用）：<b>{{ money(p.gross) }}</b></span>
+  </div>
+  <div class="kv">
+    <div><span>合同编号</span><b>{{ p.c.code or '—' }}</b></div>
+    <div><span>合同方向</span><b>{{ p.c.direction or '—' }}</b></div>
+    <div><span>合同类别</span><b>{{ p.c.category or '—' }}</b></div>
+    <div><span>状态</span><b>{{ p.c.status or '—' }}</b></div>
+    <div><span>关联项目</span><b>{{ p.c.project_name or '—' }}</b></div>
+    <div><span>往来单位</span><b>{{ p.c.unit_name or '—' }}</b></div>
+    <div><span>签订日期</span><b>{{ p.c.sign_date or '—' }}</b></div>
+    <div><span>经手人</span><b>{{ p.c.handler or '—' }}</b></div>
+    <div><span>含税金额</span><b>{{ money(p.c.amount_gross) }}</b></div>
+    <div><span>税率</span><b>{{ percent(p.c.tax_rate) }}</b></div>
+    <div><span>不含税金额</span><b>{{ money(p.c.amount_net) }}</b></div>
+    <div><span>税额</span><b>{{ money(p.c.tax_amount) }}</b></div>
+    <div><span>预付款比例</span><b>{{ p.c.prepay_ratio | num }}%</b></div>
+    <div><span>质保金比例</span><b>{{ p.c.retention_ratio | num }}%</b></div>
+    <div><span>质保开始</span><b>{{ p.c.warranty_start or '—' }}</b></div>
+    <div><span>保修期限</span><b>
+      {% if p.c.warranty_months %}{{ p.c.warranty_months | num }} 个月{% else %}—{% endif %}</b></div>
+    <div><span>质保到期</span><b>
+      {% if p.c.warranty_end %}
+        {{ p.c.warranty_end }}
+        {% set left = p.c.warranty_expire_days %}
+        {% if left is not none %}
+          {% if left < 0 %}<span class="tag tag-danger">已过保 {{ -left }} 天</span>
+          {% elif left <= 90 %}<span class="tag tag-warn">还剩 {{ left }} 天</span>
+          {% else %}<span class="tag tag-ok">还剩 {{ left }} 天</span>{% endif %}
+        {% endif %}
+      {% else %}—{% endif %}</b></div>
+    <div><span>收付款方式</span><b>{{ p.c.pay_method or '—' }}</b></div>
+    <div><span>合同清单 / 送货</span><b>{{ p.lines|length }} 项</b></div>
+  </div>
+  {% if p.c.warranty_memo %}<p class="hint">保修备注：{{ p.c.warranty_memo }}</p>{% endif %}
+  {% if p.c.memo %}<p class="hint">备注：{{ p.c.memo }}</p>{% endif %}
+</section>
+
+<section class="panel">
+  <div class="sub-head">
+    <h3>开票情况</h3>
+    <span class="muted small">共 {{ p.invoices|length }} 张，其中 {{ p.inv_open_n }} 张未结清</span>
+  </div>
+  <div class="table-wrap">
+    <table class="grid">
+      <thead>
+        <tr><th>发票号码</th><th>类型</th><th>开票日期</th>
+            <th class="num">价税合计</th><th class="num">已核销</th>
+            <th class="num">未结清</th><th>状态</th></tr>
+      </thead>
+      <tbody>
+      {% for r in p.invoices %}
+        <tr>
+          <td><a href="{{ url_for('entity_edit', key='invoices', rid=r.id) }}">{{ r.no or r.code or '' }}</a></td>
+          <td>{{ r.type or '' }}</td>
+          <td>{{ r.issue_date or '' }}</td>
+          <td class="num">{{ money(r.amount_gross) }}</td>
+          <td class="num">{{ money(r.settled) }}</td>
+          <td class="num">{{ money(r.open) }}</td>
+          <td><span class="tag {% if r.status in ('已结清','已开票') %}tag-ok{% elif r.status in ('部分核销',) %}tag-warn{% endif %}">{{ r.status or '' }}</span></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="empty">这张合同还没有开票记录</td></tr>
+      {% endfor %}
+      </tbody>
+      {% if p.invoices %}
+      <tfoot>
+        <tr><td colspan="3">合计</td>
+            <td class="num">{{ money(p.inv_gross) }}</td>
+            <td class="num">{{ money(p.inv_settled) }}</td>
+            <td class="num">{{ money(p.inv_open) }}</td>
+            <td></td></tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="sub-head">
+    <h3>收付款记录</h3>
+    <span class="muted small">收款 {{ money(p.pay_in) }} ／ 付款 {{ money(p.pay_out) }}（共 {{ p.pays|length }} 笔）</span>
+  </div>
+  <div class="table-wrap">
+    <table class="grid">
+      <thead>
+        <tr><th>付款单号</th><th>日期</th><th>方向</th><th>款项性质</th>
+            <th class="num">金额</th><th>方式</th><th>经手人</th></tr>
+      </thead>
+      <tbody>
+      {% for r in p.pays %}
+        <tr>
+          <td><a href="{{ url_for('entity_edit', key='payments', rid=r.id) }}">{{ r.code or '' }}</a></td>
+          <td>{{ r.pay_date or '' }}</td>
+          <td>{{ r.direction or '' }}</td>
+          <td>{{ r.nature or '' }}</td>
+          <td class="num">{{ money(r.amount) }}</td>
+          <td>{{ r.pay_method or '' }}</td>
+          <td>{{ r.handler or '' }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="empty">还没有收付款记录</td></tr>
+      {% endfor %}
+      </tbody>
+      {% if p.pays %}
+      <tfoot>
+        <tr><td colspan="4">合计</td>
+            <td class="num">{{ money(p.pay_total) }}</td>
+            <td colspan="2"></td></tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="sub-head">
+    <h3>合同清单与送货</h3>
+    <span class="muted small">清单合计 {{ money(p.item_amount) }}；已登记费用 {{ money(p.item_cost) }}</span>
+  </div>
+  <div class="table-wrap">
+    <table class="grid">
+      <thead>
+        <tr><th>序号</th><th>品名 / 项目</th><th>品牌 / 型号</th><th>参数 / 规格</th>
+            <th>单位</th><th class="num">数量</th><th class="num">已送</th>
+            <th class="num">未送</th><th class="num">单价</th><th class="num">金额</th>
+            <th class="num">已登记费用</th></tr>
+      </thead>
+      <tbody>
+      {% for r in p.lines %}
+        <tr>
+          <td>{{ r.seq }}</td>
+          <td>{{ r.name or '' }}</td>
+          <td>{{ [r.brand, r.model] | select | join(' ') }}</td>
+          <td class="muted small">{{ r.spec or '' }}</td>
+          <td>{{ r.unit or '' }}</td>
+          <td class="num">{{ r.qty | num }}</td>
+          <td class="num">{{ r.sent | num }}</td>
+          <td class="num {% if r.left > 0 %}muted{% endif %}">{{ r.left | num }}</td>
+          <td class="num">{{ money(r.price) }}</td>
+          <td class="num">{{ money(r.amount) }}</td>
+          <td class="num">{{ money(r.cost) }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="11" class="empty">这张合同还没有合同清单</td></tr>
+      {% endfor %}
+      </tbody>
+      {% if p.lines %}
+      <tfoot>
+        <tr><td colspan="9">合计</td>
+            <td class="num">{{ money(p.item_amount) }}</td>
+            <td class="num">{{ money(p.item_cost) }}</td></tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="sub-head">
+    <h3>对私结算（我方利润与应付居间人）</h3>
+    <span class="muted small">扣税＝我方利润：{{ money(p.p_profit) }}；返还居间人：{{ money(p.p_payable) }}</span>
+  </div>
+  <div class="table-wrap">
+    <table class="grid">
+      <thead>
+        <tr><th>计算单号</th><th>标题</th><th>日期</th><th>居间人</th><th>状态</th>
+            <th class="num">收入</th><th class="num">我方利润</th>
+            <th class="num">成本</th><th class="num">返还居间人</th></tr>
+      </thead>
+      <tbody>
+      {% for r in p.priv %}
+        <tr>
+          <td><a href="{{ url_for('entity_edit', key='private_settlements', rid=r.id) }}">{{ r.code or '' }}</a></td>
+          <td>{{ r.title or '' }}</td>
+          <td>{{ r.calc_date or '' }}</td>
+          <td>{{ r.broker or '—' }}</td>
+          <td><span class="tag">{{ r.status or '' }}</span></td>
+          <td class="num">{{ money(r.amount_income) }}</td>
+          <td class="num">{{ money(r.amount_tax) }}</td>
+          <td class="num">{{ money(r.amount_cost) }}</td>
+          <td class="num"><b>{{ money(r.amount_payable) }}</b></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="9" class="empty">
+          这张合同还没有对私计算单。到「业务单据 → 对私计算」新建（合同页有【对私计算】按钮）
+        </td></tr>
+      {% endfor %}
+      </tbody>
+      {% if p.priv %}
+      <tfoot>
+        <tr><td colspan="5">合计</td>
+            <td class="num">{{ money(p.p_income) }}</td>
+            <td class="num">{{ money(p.p_profit) }}</td>
+            <td class="num">{{ money(p.p_cost) }}</td>
+            <td class="num">{{ money(p.p_payable) }}</td></tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+</section>
+
+{% if p.deliveries %}
+<section class="panel">
+  <div class="sub-head"><h3>送货单</h3>
+    <span class="muted small">共 {{ p.deliveries|length }} 张</span></div>
+  <div class="table-wrap">
+    <table class="grid">
+      <thead><tr><th>送货单号</th><th>送货日期</th><th>收货人</th>
+                 <th>状态</th><th class="num">明细项数</th><th class="num">合计数量</th></tr></thead>
+      <tbody>
+      {% for r in p.deliveries %}
+        <tr>
+          <td><a href="{{ url_for('entity_edit', key='deliveries', rid=r.id) }}">{{ r.code or '' }}</a></td>
+          <td>{{ r.deliver_date or '' }}</td>
+          <td>{{ r.receiver or '' }}</td>
+          <td><span class="tag">{{ r.status or '' }}</span></td>
+          <td class="num">{{ r.item_count }}</td>
+          <td class="num">{{ r.total_qty | num }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% if p.files %}
+<section class="panel">
+  <div class="sub-head"><h3>合同附件</h3>
+    <span class="muted small">点文件名直接打开原件（PDF / 图片在浏览器里看，Word / Excel 等会下载）</span>
+    <a class="btn btn-sm" href="{{ url_for('contract_files', rid=p.c.id) }}">管理附件</a></div>
+  <div class="table-wrap">
+    <table class="grid">
+      <thead><tr><th>文件名</th><th>大小</th><th>上传时间</th></tr></thead>
+      <tbody>
+      {% for a in p.files %}
+        <tr><td>
+              <a href="{{ url_for('file_view', aid=a.id) }}" target="_blank"
+                 title="打开原件（PDF / 图片在浏览器里直接看，其它格式会下载）">{{ a.orig_name or a.stored_name }}</a>
+              <a class="muted small" href="{{ url_for('file_download', aid=a.id) }}"
+                 title="下载到本地">下载</a>
+            </td>
+            <td>{{ human_size(a.size) }}</td>
+            <td>{{ a.uploaded_at or '' }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

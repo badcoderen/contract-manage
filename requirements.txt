@@ -1,0 +1,7 @@
+Flask==3.1.3
+# 钉住下限：3.1.9 修了 CVE-2026-27199 / CVE-2026-102598（safe_join 的 Windows
+# 设备名导致 send_from_directory 读文件挂死；Linux 部署不受影响，但别解析到旧版）
+Werkzeug>=3.1.9
+waitress==3.0.2
+# 发票 PDF 解析（纯本地解析文字层，不联网）
+pymupdf==1.28.2

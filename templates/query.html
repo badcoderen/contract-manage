@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}{{ q.title }} · {{ app_title }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h2 class="page-title">{{ q.title }}</h2>
+  <div class="page-actions">
+    <form class="search" method="get" action="{{ url_for('query_view', key=q.key) }}">
+      <input type="text" name="q" value="{{ qtext }}" placeholder="在结果中筛选…">
+      <button class="btn" type="submit">筛选</button>
+      {% if qtext %}<a class="btn btn-ghost" href="{{ url_for('query_view', key=q.key) }}">清空</a>{% endif %}
+    </form>
+    <a class="btn btn-primary" href="{{ url_for('query_print', key=q.key, q=qtext) }}"
+       target="_blank" rel="noopener">打印</a>
+    <a class="btn" href="{{ url_for('export_query', fmt='xls', key=q.key, q=qtext) }}">导出 Excel</a>
+    <a class="btn" href="{{ url_for('export_query', fmt='csv', key=q.key, q=qtext) }}">导出 CSV</a>
+  </div>
+</div>
+
+{% if q.desc %}<div class="note">{{ q.desc }}</div>{% endif %}
+
+{# 序号跨页连续（与打印/导出的一致），不至于每页都从 1 开始 #}
+{% set row_base = (page - 1) * per %}
+<div class="table-wrap">
+<table class="grid">
+  <thead><tr><th class="idx">#</th>{% for c in cols %}<th class="{% if '金额' in c or '合计' in c or '预算' in c or '收入' in c or '支出' in c or '毛利' in c %}num{% endif %}">{{ c }}</th>{% endfor %}</tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr>
+      <td class="idx">{{ row_base + loop.index }}</td>
+      {% for c in cols %}
+        <td class="{% if '金额' in c or '合计' in c or '预算' in c or '收入' in c or '支出' in c or '毛利' in c %}num{% endif %}">{{ r[c] }}</td>
+      {% endfor %}
+    </tr>
+  {% else %}
+    <tr><td colspan="{{ cols|length + 1 }}" class="empty">没有数据</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% set endpoint = 'query_view' %}{% set lkey = q.key %}
+{% include "_pager.html" %}
+{% endblock %}

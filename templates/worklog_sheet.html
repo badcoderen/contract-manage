@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+{% block title %}月度记工表 · {{ app_title }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h2 class="page-title">月度记工表</h2>
+  <div class="page-actions no-print">
+    <form method="get" action="{{ url_for('worklog_sheet') }}" class="form-actions">
+      <select name="ym" onchange="this.form.submit()" title="月份">
+        {% for m in months %}
+          <option value="{{ m }}" {% if m == ym %}selected{% endif %}>{{ m }}</option>
+        {% endfor %}
+      </select>
+      <select name="project_id" onchange="this.form.submit()" title="按项目筛（记工前必须先选项目）">
+        <option value="">全部项目（只读汇总）</option>
+        <option value="0" {% if project_id == 0 %}selected{% endif %}>未指定项目</option>
+        {% for p in projects %}
+          <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+        {% endfor %}
+      </select>
+    </form>
+    <a class="btn" href="{{ url_for('worklog_batch') }}">批量记工</a>
+    <form method="post" action="{{ url_for('worklog_settle') }}" class="inline"
+          onsubmit="return confirm('把 {{ ym }} 的记工按项目汇总成「人工费」费用？\n已经生成过的会更新金额，不会重复。');">
+      <input type="hidden" name="ym" value="{{ ym }}">
+      <button class="btn btn-primary" type="submit">生成本月人工费</button>
+    </form>
+    <button class="btn" type="button" onclick="window.print()">打印</button>
+  </div>
+</div>
+
+<div class="note note-quiet no-print">
+  <b>直接在格子上点就行，不用填表：</b>点一下＝1 个工，再点＝半天（0.5），
+  再点＝<b>2</b>（按这个人的【第二工资】记一整天），再点＝清空。
+  <b>没填第二工资的人没有「2」这一档</b>（半天再点就直接清空），免得点了 2 却按默认价算。
+  每人按<b>自己的默认日工资</b>自动算钱。某一天某人价钱不一样（比如涨到 450），
+  <b>长按那个格子</b>直接填数 —— 只改这一天，其他天、其他人都不动，改过的格子标成橙色。
+  电脑上还可以<b>按住横向拖</b>，把一段日子一次记满。
+  <br>格子里的数字是<b>工天</b>（「2」表示按第二工资算的一整天，工天仍算 1 个），
+  鼠标停上去能看到「日工资 × 工天 = 金额」。
+  <b>生成本月人工费</b>会把整月按项目汇总成一条「人工费」进费用支出与项目成本，重复点只更新金额。
+</div>
+
+<div class="table-wrap">
+<table class="grid sheet">
+  <thead>
+    <tr>
+      <th class="idx">#</th>
+      <th class="who">姓名</th>
+      <th class="trade">工种</th>
+      {% for d in range(1, sheet.ndays + 1) %}<th class="day">{{ d }}</th>{% endfor %}
+      <th class="num">工天</th>
+      <th class="num">金额</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for p in sheet.people %}
+    <tr>
+      <td class="idx">{{ loop.index }}</td>
+      <td class="who"><a href="{{ url_for('entity_edit', key='workers', rid=p.worker_id) }}">{{ p.name }}</a></td>
+      <td class="trade">{{ p.trade }}</td>
+      {% for d in range(1, sheet.ndays + 1) %}
+        {% set c = p.cells.get(d) %}
+        {% set ds = "%s-%02d" % (ym, d) %}
+        <td class="day cell{% if c %} has{% endif %}{% if c and c.alt %} alt{% endif %}{% if c and c.diff %} diff{% endif %}"
+            data-date="{{ ds }}" data-wid="{{ p.worker_id }}"
+            data-def="{{ p.default_rate }}" data-rate2="{{ p.rate2 }}"
+            data-rate="{{ c.rate if c else '' }}"
+            {% if c %}title="{{ '第二工资' if c.alt else '日工资' }} {{ money(c.rate) }} × {{ c.days | num }} = {{ money(c.amount) }}{% if c.diff %}（这天工价与默认不同）{% endif %}"{% endif %}>{% if c %}{{ c.label }}{% endif %}</td>
+      {% endfor %}
+      <td class="num row-days" data-wid="{{ p.worker_id }}">{{ p.days | num }}</td>
+      <td class="num row-amount" data-wid="{{ p.worker_id }}">{{ money(p.amount) }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="{{ sheet.ndays + 5 }}" class="empty">
+      还没有在用工人 —— 先去 <a href="{{ url_for('entity_list', key='workers') }}">工人名单</a> 加人
+    </td></tr>
+  {% endfor %}
+  </tbody>
+  {% if sheet.people %}
+  <tfoot>
+    <tr>
+      <td colspan="3">合计（{{ sheet.n_people }} 人）</td>
+      {% for d in range(1, sheet.ndays + 1) %}<td class="day"></td>{% endfor %}
+      <td class="num" id="totDays">{{ sheet.totals.days | num }}</td>
+      <td class="num" id="totAmount">{{ money(sheet.totals.amount) }}</td>
+    </tr>
+  </tfoot>
+  {% endif %}
+</table>
+</div>
+
+<div class="sheet-foot">
+  <span>制表：{{ cur_user }}</span>
+  <span>班组负责人签字：________________</span>
+  <span>日期：____年____月____日</span>
+</div>
+<div class="muted small no-print">打印时间 {{ printed_at }} ｜ 共 {{ sheet.n_people }} 人</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var PID = "{{ '' if project_id is none else project_id }}";
+  function needProject() {
+    if (PID !== '') return false;
+    window.alert('记工是按「日期 + 工人 + 项目」记的：\n' +
+                 '请先在右上角选一个项目（或「未指定项目」）再点格子。\n' +
+                 '「全部项目」只是汇总视图，改这里会串到别的项目。');
+    return true;
+  }
+  var table = document.querySelector('table.sheet');
+  if (!table) return;
+
+  function money(v) {
+    return (Math.round((v || 0) * 100) / 100).toLocaleString('zh-CN',
+      {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  }
+  function plain(v) {
+    return String(Math.round((v || 0) * 100) / 100);
+  }
+  function post(url, data) {
+    var fd = new FormData();
+    Object.keys(data).forEach(function (k) {
+      if (data[k] !== '' && data[k] !== null && data[k] !== undefined) {
+        fd.append(k, data[k]);
+      }
+    });
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    var headers = meta ? {'X-CSRF-Token': meta.getAttribute('content')} : {};
+    return fetch(url, {method: 'POST', body: fd, headers: headers}).then(function (r) {
+      return r.json();
+    });
+  }
+
+  function apply(td, r) {
+    var isAlt = (r.src === '第二');
+    td.textContent = r.state || '';
+    td.classList.toggle('has', !!r.state);
+    td.classList.toggle('alt', !!r.state && isAlt);
+    var rate = parseFloat(r.rate || 0);
+    var def = parseFloat(td.dataset.def || '0');
+    td.classList.toggle('diff', !!(r.state && !isAlt && def && rate &&
+                                   Math.abs(rate - def) > 0.01));
+    td.dataset.rate = r.state ? rate : '';
+    td.title = r.state ? (isAlt ? '第二工资 ' : '日工资 ') + money(rate) +
+                ' × ' + (isAlt ? '1' : r.state) + ' = ' + money(r.amount) : '';
+    var wid = td.dataset.wid;
+    table.querySelectorAll('.row-days[data-wid="' + wid + '"]').forEach(function (x) {
+      x.textContent = plain(r.row.days);
+    });
+    table.querySelectorAll('.row-amount[data-wid="' + wid + '"]').forEach(function (x) {
+      x.textContent = money(r.row.amount);
+    });
+    if (r.total) {
+      var d = document.getElementById('totDays');
+      var a = document.getElementById('totAmount');
+      if (d) d.textContent = plain(r.total.days);
+      if (a) a.textContent = money(r.total.amount);
+    }
+  }
+
+  function askRate(td) {
+    if (needProject()) return;
+    var cur = td.dataset.rate || td.dataset.def || '';
+    // 没填第二工资的人不显示「第二 —」，免得让人以为可以按它算
+    var alt = parseFloat(td.dataset.rate2 || '0');
+    var hint = '默认 ' + (td.dataset.def || '—') +
+               (alt > 0 ? ' ／ 第二 ' + td.dataset.rate2 : '');
+    var v = window.prompt(
+      '只改「' + td.dataset.date + '」这一天的日工资。\n' +
+      hint + '\n' +
+      '其他天、其他人都不会变（这天原来没记过的，会记 1 个工）：', cur);
+    if (v === null) return;
+    post('/worklog/rate', {date: td.dataset.date, worker_id: td.dataset.wid,
+                           rate: v, project_id: PID}).then(function (r) {
+      if (!r.ok) { window.alert(r.error || '保存失败'); return; }
+      apply(td, r);
+    });
+  }
+
+  var pressTimer = null, longPressed = false;
+  var dragFrom = null, dragTo = null, dragging = false, justMarked = false;
+
+  function sameRow(a, b) {
+    return a && b && a.dataset.wid === b.dataset.wid;
+  }
+  function clearSel() {
+    table.querySelectorAll('td.cell.sel').forEach(function (x) {
+      x.classList.remove('sel');
+    });
+  }
+  function paintSel(a, b) {
+    clearSel();
+    if (!sameRow(a, b)) return;
+    var d1 = parseInt(a.dataset.date.slice(-2), 10);
+    var d2 = parseInt(b.dataset.date.slice(-2), 10);
+    var lo = Math.min(d1, d2), hi = Math.max(d1, d2);
+    table.querySelectorAll('td.cell[data-wid="' + a.dataset.wid + '"]').forEach(function (x) {
+      var d = parseInt(x.dataset.date.slice(-2), 10);
+      if (d >= lo && d <= hi) x.classList.add('sel');
+    });
+  }
+  function doMark(a, b) {
+    if (needProject()) return;
+    var s = [a.dataset.date, b.dataset.date].sort();
+    post('/worklog/mark', {worker_id: a.dataset.wid, from: s[0], to: s[1],
+                           project_id: PID}).then(function (r) {
+      clearSel();
+      if (!r.ok) { window.alert(r.error || '保存失败'); return; }
+      window.location.reload();
+    });
+  }
+
+  table.querySelectorAll('td.cell').forEach(function (td) {
+    td.addEventListener('pointerdown', function (e) {
+      longPressed = false;
+      pressTimer = setTimeout(function () {
+        longPressed = true;
+        clearSel();
+        askRate(td);
+      }, 600);
+      if (e.pointerType === 'mouse') {
+        dragFrom = td;
+        dragTo = null;
+        dragging = false;
+      }
+    });
+    td.addEventListener('pointerenter', function () {
+      if (dragFrom && dragFrom !== td && sameRow(dragFrom, td)) {
+        dragging = true;
+        dragTo = td;
+        paintSel(dragFrom, td);
+      }
+    });
+    td.addEventListener('pointerup', function () {
+      clearTimeout(pressTimer);
+    });
+    td.addEventListener('pointerleave', function () {
+      clearTimeout(pressTimer);
+    });
+    td.addEventListener('click', function () {
+      if (longPressed) { longPressed = false; clearSel(); return; }
+      if (justMarked) { justMarked = false; return; }
+      if (dragging && dragFrom && dragTo) {
+        dragging = false;
+        justMarked = true;
+        setTimeout(function () { justMarked = false; }, 400);
+        doMark(dragFrom, dragTo);
+        dragFrom = null;
+        dragTo = null;
+        return;
+      }
+      dragFrom = null;
+      if (needProject()) return;
+      post('/worklog/toggle', {date: td.dataset.date, worker_id: td.dataset.wid,
+                               project_id: PID}).then(function (r) {
+        if (!r.ok) { window.alert(r.error || '保存失败'); return; }
+        apply(td, r);
+        if (r.warn) window.alert(r.warn);
+      });
+    });
+  });
+
+  document.addEventListener('pointerup', function () {
+    clearTimeout(pressTimer);
+    if (!dragging) { dragFrom = null; dragTo = null; }
+  });
+})();
+</script>
+{% endblock %}

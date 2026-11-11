@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}页面权限 · {{ u.display_name or u.username }} · {{ app_title }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h2 class="page-title">页面权限 <span class="muted">/ {{ u.display_name or u.username }}
+    （{{ ROLE_LABELS.get(u.role, u.role) }}）</span></h2>
+  <div class="page-actions">
+    <a class="btn" href="{{ url_for('user_edit', uid=u.id) }}">编辑账号</a>
+    {% if u.role == 'employee' %}
+      <a class="btn" href="{{ url_for('user_access', uid=u.id) }}">项目授权</a>
+    {% endif %}
+    <a class="btn" href="{{ url_for('user_list') }}">返回用户列表</a>
+  </div>
+</div>
+
+<div class="note">
+  这一页决定这个账号登录后<b>左侧菜单里能看到哪些页面和模块</b>，以及直接敲地址时放不放行。
+  <br><b>每一列怎么看：</b><b>角色默认</b>＝不看本页设置、只按角色（{{ ROLE_LABELS.get(u.role, u.role) }}）本来的范围；
+  <b>实际生效</b>＝保存之后这个账号真正看到的（默认档＝跟随角色默认，开放/隐藏档＝按你选的来）；
+  <b>这个账号</b>＝你要设的档位。
+  <br><b>四档含义：</b><b>默认</b>＝跟随角色；<b>只读</b>＝强制可见但只能看（把某人本来能改的页面收成只读也行）；
+  <b>可编辑</b>＝强制可见并且能新增 / 修改 / 删除（员工要记工、录工人，就必须选这一档）；
+  <b>隐藏</b>＝强制收起。
+  <br>当前已改动 <b>{{ changed }}</b> 项；想全部恢复成角色默认，点下面的「全部恢复默认」再保存即可。
+  <br><b>注意：</b>「查询统计」「对私计算」「工资管理」是全公司视图，
+  开给员工后他就能看到所有项目的数据；「报销审批与打款」「出勤审批」能看到别人的单据 —— 请按需要开放。
+</div>
+
+{% if is_admin_target %}
+  <div class="note note-quiet">
+    这是<b>管理员</b>账号：管理员始终拥有全部功能（防止把自己锁在门外），
+    所以不能在这里限制它。要限制，请把该账号的角色改成「财务」或「员工」后再配置。
+  </div>
+  <div class="table-wrap">
+  <table class="grid">
+    <thead><tr><th>分组</th><th>页面 / 模块</th><th>说明</th></tr></thead>
+    <tbody>
+    {% for gname, rows in groups %}
+      <tr><td>{{ gname }}</td>
+        <td>{% for r in rows %}{{ r.title }}{% if not loop.last %}、{% endif %}{% endfor %}</td>
+        <td class="muted small">管理员默认全部可见</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+{% else %}
+<form method="post" class="form">
+  <div class="form-actions" style="margin-bottom:8px">
+    <button class="btn btn-sm" type="button" data-group="*" data-set="default">全部恢复默认</button>
+    <button class="btn btn-sm" type="button" data-group="*" data-set="read">全部只读</button>
+    <button class="btn btn-sm" type="button" data-group="*" data-set="write">全部可编辑</button>
+    <button class="btn btn-sm" type="button" data-group="*" data-set="deny">全部隐藏</button>
+    <span class="muted small">（改完记得点最下面「保存页面权限」）</span>
+  </div>
+
+  <div class="table-wrap">
+  <table class="grid">
+    <thead>
+      <tr><th style="width:26%">页面 / 模块</th>
+        <th style="width:13%">角色默认</th>
+        <th style="width:15%">实际生效</th>
+        <th style="width:46%">这个账号</th></tr>
+    </thead>
+    <tbody>
+    {% for gname, rows in groups %}
+      {% set gidx = loop.index0 %}
+      <tr class="perm-group"><td colspan="4">{{ gname }}</td></tr>
+      {% for r in rows %}
+      <tr data-group="{{ gidx }}">
+        <td>{{ r.title }}</td>
+        <td>
+          {% if r.default_visible %}<span class="tag tag-ok">可见</span>
+          {% else %}<span class="tag tag-warn">不可见</span>{% endif %}
+        </td>
+        <td>
+          {% if r.effective == 'write' %}<span class="tag tag-ok">可编辑</span>
+          {% elif r.effective == 'read' %}<span class="tag tag-warn">只读</span>
+          {% else %}<span class="tag tag-danger">不可见</span>{% endif %}
+          {% if r.state == 'read' and not r.default_visible %}
+            <div class="muted small" style="margin-top:2px">已单独开放（只读）</div>
+          {% elif r.state == 'write' and not r.default_visible %}
+            <div class="muted small" style="margin-top:2px">已单独开放（可编辑）</div>
+          {% elif r.state == 'read' and r.default_visible %}
+            <div class="muted small" style="margin-top:2px">已单独收回编辑权</div>
+          {% elif r.state == 'deny' and r.default_visible %}
+            <div class="muted small" style="margin-top:2px">已单独收起</div>
+          {% endif %}
+        </td>
+        <td>
+          {% if r.grantable %}
+            <label class="perm-choice">
+              <input type="radio" name="{{ r.field }}" value="default"
+                     {% if r.state == 'default' %}checked{% endif %}> 默认
+            </label>
+            <label class="perm-choice" title="能看，不能改">
+              <input type="radio" name="{{ r.field }}" value="read"
+                     {% if r.state == 'read' %}checked{% endif %}> 只读
+            </label>
+            <label class="perm-choice" title="能看，也能新增/修改/删除">
+              <input type="radio" name="{{ r.field }}" value="write"
+                     {% if r.state == 'write' %}checked{% endif %}> 可编辑
+            </label>
+            <label class="perm-choice">
+              <input type="radio" name="{{ r.field }}" value="deny"
+                     {% if r.state == 'deny' %}checked{% endif %}> 隐藏
+            </label>
+          {% else %}
+            <span class="muted small">仅管理员 / 财务可用，不可配置</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  <div class="form-actions">
+    <button class="btn btn-primary" type="submit">保存页面权限</button>
+    <a class="btn" href="{{ url_for('user_list') }}">取消</a>
+  </div>
+</form>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  function apply(groupKey, value) {
+    var rows = document.querySelectorAll("tr[data-group]");
+    rows.forEach(function (tr) {
+      var key = tr.getAttribute("data-group") || "";
+      if (groupKey !== "*" && key !== groupKey) return;
+      var input = tr.querySelector('input[type="radio"][value="' + value + '"]');
+      if (input && !input.disabled) input.checked = true;
+    });
+  }
+  document.querySelectorAll("button[data-set]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      apply(btn.getAttribute("data-group") || "*", btn.getAttribute("data-set"));
+    });
+  });
+})();
+</script>
+{% endblock %}

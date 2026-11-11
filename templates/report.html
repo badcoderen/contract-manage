@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}{{ rep.title }} · {{ app_title }}{% endblock %}
+{% block content %}
+<div class="page-head no-print">
+  <h2 class="page-title">{{ rep.title }}</h2>
+  <div class="page-actions">
+    <button class="btn btn-primary" type="button" onclick="window.print()">打印 / 另存为 PDF</button>
+    <a class="btn" href="{{ url_for('export_query', fmt='xls', key=rep.query) }}">导出 Excel</a>
+    <a class="btn" href="{{ url_for('export_query', fmt='csv', key=rep.query) }}">导出 CSV</a>
+  </div>
+</div>
+
+<div class="report {% if rep.landscape %}landscape{% endif %}">
+  <header class="report-head">
+    <div class="report-org">{{ company_name }}</div>
+    <h1>{{ rep.title }}</h1>
+    <div class="report-meta">{{ app_title }} ｜ 打印时间 {{ printed_at }} ｜ 共 {{ total|default(rows|length) }} 行{% if pages|default(1) > 1 %}（本页 {{ rows|length }} 行）{% endif %}</div>
+  </header>
+  <div class="table-scroll">
+  {# 序号跨页连续；打印（不分页）时就是 1..N #}
+  {% set row_base = ((page|default(1)) - 1) * (per|default(0)) %}
+  <table class="grid report-table">
+    <thead><tr><th class="idx no-print">#</th>{% for c in cols %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr><td class="idx no-print">{{ row_base + loop.index }}</td>
+        {% for c in cols %}<td class="{% if '金额' in c or '合计' in c or '预算' in c or '收入' in c or '支出' in c or '毛利' in c %}num{% endif %}">{{ r[c] }}</td>{% endfor %}
+      </tr>
+    {% else %}
+      <tr><td colspan="{{ cols|length + 1 }}" class="empty">没有数据</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <footer class="report-foot">
+    <span>制表单位：{{ company_name }}</span>
+    <span>制表：{{ cur_user }}</span>
+    <span>审核：__________</span>
+    <span>第 {{ page|default(1) }} 页</span>
+  </footer>
+</div>
+{% set endpoint = 'report_view' %}{% set lkey = rep.key %}
+{% include "_pager.html" %}
+{% endblock %}

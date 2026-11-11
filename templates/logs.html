@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}登录日志 · {{ app_title }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h2 class="page-title">登录日志</h2>
+  <div class="page-actions">
+    {% if only_fail %}
+      <a class="btn" href="{{ url_for('user_logs') }}">显示全部</a>
+    {% else %}
+      <a class="btn" href="{{ url_for('user_logs', only_fail=1) }}">只看失败</a>
+    {% endif %}
+    <a class="btn btn-ghost" href="{{ url_for('user_list') }}">用户管理</a>
+  </div>
+</div>
+
+<div class="note">
+  同一<b>账号</b>或同一 <b>IP</b> 在 {{ window }} 分钟内失败 {{ max_fails }} 次，
+  将被锁定 {{ lock_min }} 分钟（两把锁任一触发即拦截）。日志保留最近若干天。
+</div>
+
+<div class="table-wrap">
+<table class="grid">
+  <thead><tr><th>时间</th><th>结果</th><th>账号</th><th>来源 IP</th><th>说明</th></tr></thead>
+  <tbody>
+  {% for r in logs %}
+    <tr>
+      <td>{{ r.at }}</td>
+      <td>{% if r.ok %}<span class="tag tag-ok">成功</span>{% else %}<span class="tag tag-warn">失败</span>{% endif %}</td>
+      <td>{{ r.username }}</td>
+      <td>{{ r.ip }}</td>
+      <td>{{ r.reason or '' }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5" class="empty">暂无记录</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="muted small">共 {{ logs|length }} 条</p>
+{% endblock %}

@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}我的费用报销 · {{ app_title }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h2 class="page-title">我的费用报销</h2>
+  <div class="page-actions">
+    {% if is_approver %}
+      <a class="btn" href="{{ url_for('entity_new', key='advances') }}">+ 预支打款给员工</a>
+      <a class="btn" href="{{ url_for('reimb_approve') }}">报销审批与打款</a>
+    {% else %}
+      <a class="btn btn-primary" href="{{ url_for('entity_new', key='costs') }}">+ 我要报销</a>
+    {% endif %}
+  </div>
+</div>
+
+{% if is_employee %}
+<div class="note">三种报销方式：<b>垫付报销</b>＝你先垫钱，填单后财务审批打款给你；<b>预支核销</b>＝财务已先打过备用金，从这里抵扣；<b>无需报销</b>＝这笔不用报销（公司直接付了／不用给谁打钱），保存后状态直接是「无需报销」，不进报销审批待办。</div>
+{% endif %}
+
+<div class="cards">
+  <div class="card"><div class="card-label">预支累计收到</div>
+    <div class="card-value">{{ money(s.advance_total) }}</div></div>
+  <div class="card card-hl"><div class="card-label">预支未核销余额</div>
+    <div class="card-value">{{ money(s.advance_balance) }}</div>
+    <div class="card-foot">已核销 {{ money(s.advance_used) }}</div></div>
+  <div class="card"><div class="card-label">待审批</div>
+    <div class="card-value">{{ money(s.pending) }}</div>
+    <div class="card-foot">{{ s.pending_count }} 笔</div></div>
+  <div class="card"><div class="card-label">已批准待打款</div>
+    <div class="card-value">{{ money(s.approved) }}</div></div>
+  <div class="card"><div class="card-label">已打款</div>
+    <div class="card-value">{{ money(s.paid) }}</div></div>
+  <div class="card"><div class="card-label">已驳回</div>
+    <div class="card-value">{{ money(s.rejected) }}</div></div>
+</div>
+
+<section class="panel">
+  <h3>我收到的预支款</h3>
+  <div class="table-wrap">
+  <table class="grid">
+    <thead><tr><th>预支单号</th><th>打款日期</th><th class="num">预支金额</th>
+      <th class="num">已核销</th><th class="num">可用余额</th><th>状态</th></tr></thead>
+    <tbody>
+    {% for r in adv %}
+      <tr><td>{{ r.code or '' }}</td><td>{{ r.pay_date or '' }}</td>
+        <td class="num">{{ money(r.amount) }}</td>
+        <td class="num">{{ money(r.used) }}</td>
+        <td class="num"><b>{{ money(r.balance) }}</b></td>
+        <td><span class="tag">{{ r.status or '' }}</span></td></tr>
+    {% else %}
+      <tr><td colspan="6" class="empty">还没有收到预支款</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="sub-head">
+    <h3>我的报销明细</h3>
+    <a class="btn btn-sm" href="{{ url_for('entity_list', key='costs') }}">去费用支出管理</a>
+  </div>
+  <div class="table-wrap">
+  <table class="grid">
+    <thead><tr><th>费用单号</th><th>发生日期</th><th>项目</th><th>费用类别</th>
+      <th>摘要</th><th class="num">金额</th><th>报销方式</th><th>审批状态</th><th>审批意见</th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr><td><a href="{{ url_for('entity_edit', key='costs', rid=r.id) }}">{{ r.code or '' }}</a></td>
+        <td>{{ r.cost_date or '' }}</td>
+        <td>{{ r.project_name or '' }}</td>
+        <td>{{ r.category or '' }}</td>
+        <td>{{ r.summary or '' }}</td>
+        <td class="num">{{ money(r.amount) }}</td>
+        <td>{{ r.settle_type or '' }}</td>
+        <td><span class="tag {% if r.approval_status in ('已批准','已打款') %}tag-ok{% elif r.approval_status in ('待审批',) %}tag-warn{% elif r.approval_status == '已驳回' %}tag-danger{% endif %}">{{ r.approval_status or '' }}</span></td>
+        <td class="muted small">{{ r.approve_memo or '' }}</td></tr>
+    {% else %}
+      <tr><td colspan="9" class="empty">还没有报销记录</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endblock %}

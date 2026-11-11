@@ -1,0 +1,785 @@
+{% extends "base.html" %}
+{% block title %}{{ ('新增' if is_new else '编辑') }} {{ ent.title }} · {{ app_title }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h2 class="page-title">{{ ent.title }} <span class="muted">/ {{ '新增' if is_new else '编辑' }}</span></h2>
+  <div class="page-actions">
+    {# 回到你点「编辑」时那一页（页码 / 搜索 / 排序都在 back 里） #}
+    <a class="btn btn-ghost" href="{{ back or url_for('entity_list', key=key) }}">返回列表</a>
+  </div>
+</div>
+
+{% if ent.note %}<div class="note">{{ ent.note }}</div>{% endif %}
+
+{% if imp %}
+{# ---------- PDF 导入的「逐张确认」面板（在主表单外面，避免嵌套 form）---------- #}
+<section class="import-panel">
+  <div class="ip-head">
+    <b>PDF 导入 · 第 {{ imp.pos }} / {{ imp.counts.total }} 张</b>
+    <span class="muted">已保存 {{ imp.counts.done }} ・ 已跳过 {{ imp.counts.skip }}</span>
+    <div class="ip-actions">
+      <a class="btn btn-sm" target="_blank"
+         href="{{ url_for('invoice_import_file', token=imp.token, i=imp.i) }}">看原件</a>
+      <form method="post" class="inline"
+            action="{{ url_for('invoice_import_skip', token=imp.token) }}">
+        <input type="hidden" name="i" value="{{ imp.i }}">
+        <button class="btn btn-sm" type="submit">跳过这张</button>
+      </form>
+      <form method="post" class="inline"
+            action="{{ url_for('invoice_import_cancel', token=imp.token) }}"
+            onsubmit="return confirm('结束本次导入？已经保存的发票不受影响。');">
+        <button class="btn btn-sm btn-ghost" type="submit">结束导入</button>
+      </form>
+    </div>
+  </div>
+  <div class="ip-sub muted small">
+    源文件：{{ imp.orig }}
+    {% if imp.item_count %}｜票面明细 {{ imp.item_count }} 项{% endif %}
+    {% if imp.amount_cn %}｜大写金额 {{ imp.amount_cn }}{% if imp.amount_matched %}（与小写一致）{% endif %}{% endif %}
+  </div>
+  {% if imp.error %}<div class="ip-line ip-err">{{ imp.error }}</div>{% endif %}
+  {% if imp.dup %}
+  <div class="ip-line ip-warn">
+    这个发票号码已经录过了：
+    <a href="{{ url_for('entity_edit', key='invoices', rid=imp.dup['id']) }}">发票 #{{ imp.dup['id'] }}</a>
+    （{{ imp.dup.issue_date or '—' }} ・ {{ money(imp.dup.amount_gross) }}）。
+    确认是同一张，就点上面的【跳过这张】。
+  </div>
+  {% endif %}
+  {% if imp.warnings %}
+  <ul class="ip-warns">
+    {% for w in imp.warnings %}<li>{{ w }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+  <div class="ip-line">
+    票面对方公司：<b>{{ imp.raw_unit or '（没认出来）' }}</b>
+    {% if imp.unit_conf == 'exact' %}→ 已自动匹配到往来单位
+    {% elif imp.unit_conf == 'fuzzy' %}→ 按相似名称匹配的，请核对下面的【往来单位】
+    {% elif imp.unit_conf == 'new' %}→ 已新建并选中
+    {% else %}
+      → <span class="ip-warn-inline">往来单位里没有这个名字</span>，可以就地建一个：
+      <form method="post" class="inline ip-add"
+            action="{{ url_for('invoice_import_unit', token=imp.token) }}">
+        <input type="hidden" name="i" value="{{ imp.i }}">
+        <input type="hidden" name="name" value="{{ imp.raw_unit }}">
+        <input type="text" name="tax_no" placeholder="纳税人识别号（可留空）" class="ip-tax">
+        <button class="btn btn-sm btn-primary" type="submit">新建并选中</button>
+      </form>
+    {% endif %}
+  </div>
+  {% if imp.item_names %}
+  <details class="ip-items">
+    <summary>票面货物 / 服务（{{ imp.item_count }} 项）</summary>
+    <div class="ip-item-list">{{ imp.item_names|join('、') }}</div>
+  </details>
+  {% endif %}
+  <p class="hint">认不准的字段上面会写明原因，请对着原件核一遍再保存；
+    保存后这张 PDF 会存进「发票附件」，以后能直接在发票上打开。</p>
+</section>
+{% endif %}
+
+{% if key == 'advances' and not is_new and is_approver
+      and (row.get('status') or '待打款') == '待打款' %}
+<div class="action-strip">
+  <div class="action-strip-text">
+    <b>这笔预支款目前是「待打款」</b>
+    {% if is_finance %}
+      <span class="muted">钱实际打给员工后，点右边按钮确认；确认之后员工才能用它核销费用。</span>
+    {% else %}
+      <span class="muted">钱实际打给员工后，由财务在本页点【确认打款】；确认之后员工才能用它核销费用。</span>
+    {% endif %}
+  </div>
+  {% if is_finance %}
+  <form method="post" action="{{ url_for('advance_confirm_pay', rid=row['id']) }}"
+        onsubmit="return confirm('确认已把 {{ money(row.get('amount')) }} 打给该员工？');">
+    <button class="btn btn-primary" type="submit">确认打款</button>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
+
+{# ⚠️ 所有 data-* 必须在**同一个**开始标签里，标签只能有一个 `>` 收尾。
+   曾经在中间多写了一个 `>`，导致 data-settle / data-calc / data-auto-calc
+   三个属性全被浏览器当成正文丢掉 —— 核销加不了行、税额与加班时长都不自动算。 #}
+<form method="post" class="form" id="mainform"
+      {% if ent.attachments %}enctype="multipart/form-data"{% endif %}
+      {% if imp %}data-import="1"{% endif %}
+      {% if ent.calc %}data-calc-gross="{{ ent.calc.gross }}" data-calc-rate="{{ ent.calc.rate }}"
+      data-calc-net="{{ ent.calc.net }}" data-calc-tax="{{ ent.calc.tax }}"{% endif %}
+      {% if ent.auto_calc %}data-auto-calc='{{ ent.auto_calc|tojson }}'
+      data-params='{{ p_params|tojson }}'{% endif %}
+      {% if ent.settlements %}data-settle="1" data-payment-amount="amount"{% endif %}>
+  {# 保存 / 校验失败回显 都要知道原来那一页，否则「返回列表」会掉回第 1 页 #}
+  <input type="hidden" name="back" value="{{ back or '' }}">
+  {% if imp %}{# 告诉服务端：这张存完接着处理队列里的下一张 #}
+  <input type="hidden" name="_imp" value="{{ imp.token }}">
+  <input type="hidden" name="_imp_i" value="{{ imp.i }}">
+  {# 票面货物/服务名：用来猜费用类别（服务→人工费）与自动对应合同清单项 #}
+  <input type="hidden" name="_item_names" value="{{ imp.item_names|join('、') }}">
+  {% endif %}
+  {% if ent.auto_calc %}
+  <div class="note note-quiet">填好日期与时间后，时长 / 天数 / 补贴会自动算出；手工改过的数字不会被自动覆盖，清空后可重新自动计算。</div>
+  {% endif %}
+  <div class="field-grid">
+    {% for f in fields %}
+      <div class="field {% if f.type == 'textarea' %}span2{% endif %}">
+        <label for="f_{{ f.name }}">{{ f.label }}{% if f.required %}<span class="req">*</span>{% endif %}</label>
+
+        {% if f.mode == 'readonly' %}
+          <div class="ro-value {% if f.type == 'textarea' %}ro-memo{% endif %}">
+            {% if f.value in (None, '') %}
+              <span class="muted">{% if '意见' in f.label %}（暂未填写）{% else %}—{% endif %}</span>
+            {% elif f.type in ('select_fixed', 'select_dict', 'lookup') %}
+              <span class="tag {{ f.value|badge_class }}">{{ f.value }}</span>
+            {% else %}{{ f.value }}{% endif %}
+          </div>
+
+        {% elif f.type == 'textarea' %}
+          <textarea id="f_{{ f.name }}" name="{{ f.name }}" rows="2">{{ f.value or '' }}</textarea>
+
+        {% elif f.type == 'checkbox' %}
+          <label class="check-inline">
+            <input type="checkbox" id="f_{{ f.name }}" name="{{ f.name }}" value="1"
+                   {% if f.value in (1, '1', True) %}checked{% endif %}> {{ f.check_label or '启用' }}
+          </label>
+
+        {% elif f.type in ('select_dict', 'select_fixed', 'lookup') %}
+          {# f.sets：字段级联动，如支付状态 ⇒ 已付金额（值 "@amount" = 取同表单该字段的值） #}
+          <select id="f_{{ f.name }}" name="{{ f.name }}"
+                  {% if f.required %}required{% endif %}
+                  {% if f.sets %}data-sets='{{ f.sets|tojson }}'{% endif %}
+                  {% if f.options_by %}data-options-by='{{ f.options_by|tojson }}'{% endif %}>
+            <option value="">— 请选择 —</option>
+            {% for val, label in f.options %}
+              <option value="{{ val }}" {% if f.value|string == val|string %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+
+        {% elif f.type in ('money', 'rate', 'number') %}
+          <input type="number" step="{{ f.step or '0.01' }}" id="f_{{ f.name }}" name="{{ f.name }}"
+                 value="{{ f.value|num }}" {% if f.readonly %}readonly{% endif %}
+                 {% if f.calc %}data-calc-field="{{ f.calc }}"{% endif %}
+                 class="{% if f.readonly %}readonly{% endif %}">
+
+        {% elif f.type == 'date' %}
+          <input type="date" id="f_{{ f.name }}" name="{{ f.name }}" value="{{ f.value or '' }}">
+
+        {% elif f.type == 'time' %}
+          <input type="time" id="f_{{ f.name }}" name="{{ f.name }}" value="{{ f.value or '' }}">
+
+        {% else %}
+          <input type="text" id="f_{{ f.name }}" name="{{ f.name }}" value="{{ f.value or '' }}"
+                 {% if f.required %}required{% endif %}>
+        {% endif %}
+
+        {% if f.hint %}<div class="hint">{{ f.hint }}</div>{% endif %}
+      </div>
+    {% endfor %}
+  </div>
+
+  {% if ent.settlements %}
+  <section class="sub-panel">
+    <div class="sub-head">
+      <h3>发票核销明细</h3>
+      <button class="btn btn-sm" type="button" onclick="addSettleRow()">+ 添加一行</button>
+    </div>
+    <p class="muted small">一行对应一张发票。填【核销金额】自动算比例，填【核销比例】(0.5 = 50%) 自动算金额；选中发票后可点“按余额”自动填入剩余可核销金额。</p>
+    <div class="table-wrap card-wrap">
+      <table class="grid card-on-mobile" id="settleTable">
+        <thead>
+          <tr><th style="width:38%">发票</th><th style="width:14%">价税合计</th>
+              <th class="num" style="width:15%">核销金额</th><th class="num" style="width:12%">核销比例</th>
+              <th style="width:16%">备注</th><th style="width:48px"></th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="settle-summary">
+      <span>本笔付款金额：<b id="payAmount">0.00</b></span>
+      <span>已核销：<b id="paySettled">0.00</b></span>
+      <span>尚未分配：<b id="payRest">0.00</b></span>
+    </div>
+  </section>
+  {% endif %}
+
+  {% if key == 'private_settlements' %}
+  {# 结算看板：把「扣税＝我方利润」这件事摆在最上面，金额随明细实时变 #}
+  {% set its = detail_rows.get('items') or [] %}
+  <section class="sub-panel settle-board">
+    <div class="sub-head">
+      <h3>结算看板</h3>
+      <span class="muted small">
+        我方利润 = 收入 × 扣税比例（「扣税」是名义叫法）
+      </span>
+    </div>
+    <div class="board-row">
+      <div class="board-cell"><span>收入合计</span>
+        <b data-board="income">{{ money(its | sum(attribute='income')) }}</b></div>
+      <div class="board-op">−</div>
+      <div class="board-cell"><span>成本合计</span>
+        <b data-board="cost">{{ money(its | sum(attribute='cost_amount')) }}</b></div>
+      <div class="board-op">−</div>
+      <div class="board-cell is-profit"><span>我方利润合计</span>
+        <b data-board="profit">{{ money(its | sum(attribute='tax_amount')) }}</b></div>
+      <div class="board-op">=</div>
+      <div class="board-cell is-key"><span>返还居间人合计</span>
+        <b data-board="payable">{{ money(its | sum(attribute='payable')) }}</b></div>
+    </div>
+    <p class="hint">
+      逐行的实时合计见明细下方；四个数与这里的口径完全一致（保存时服务端再算一遍）。
+      跨单据的利润汇总在「查询统计 → 对私利润汇总」。
+    </p>
+  </section>
+
+  {# 关联合同可多选：扣税可能同时涉及好几张合同 #}
+  <section class="sub-panel" id="contractPicker">
+    <div class="sub-head">
+      <h3>关联合同 <span class="muted small">（可多选）</span></h3>
+      <div class="btn-row">
+        <span class="muted small" data-chk-count></span>
+        {% if is_new %}
+        <button class="btn btn-sm" type="button"
+                data-prefill-href="{{ url_for('entity_new', key=key) }}"
+                onclick="prefillFromChecked(this)">按勾选的合同带出清单</button>
+        {% endif %}
+      </div>
+    </div>
+    <div class="chk-bar">
+      <input type="text" class="chk-filter" data-chk-filter
+             placeholder="输入合同编号 / 名称快速筛">
+      <span class="muted small">
+        勾好的合同会出现在明细的【所属合同】里，清单项下拉也按合同分组。
+      </span>
+    </div>
+    <div class="chk-grid">
+      {% for cid, cname in contract_pick or [] %}
+        <label class="chk-item">
+          <input type="checkbox" name="contract_ids" value="{{ cid }}"
+                 {% if cid in (sel_contract_ids or []) %}checked{% endif %}>
+          <span>{{ cname }}</span>
+        </label>
+      {% endfor %}
+      {% if not contract_pick %}
+        <p class="hint">还没有合同：先到「合同管理」建好合同，再回来关联。</p>
+      {% endif %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if key == 'private_settlements' and cost_ref %}
+  <section class="sub-panel">
+    <div class="sub-head">
+      <h3>费用支出参考 <span class="muted small">（只显示，不自动扣）</span></h3>
+    </div>
+    <div class="kv">
+      <div><span>本项目费用支出合计</span><b>{{ money(cost_ref.project_total) }}</b></div>
+      <div><span>已对应到所关联合同的清单项</span><b>{{ money(cost_ref.linked) }}</b></div>
+      <div><span>未对应到这些清单项</span><b>{{ money(cost_ref.unlinked) }}</b></div>
+    </div>
+    {% if cost_ref.lines %}
+    <div class="table-wrap">
+      <table class="grid">
+        <thead>
+          <tr><th class="num" style="width:7%">序号</th>
+              <th style="width:22%">所属合同</th><th>合同清单项</th>
+              <th class="num" style="width:16%">清单金额</th>
+              <th class="num" style="width:16%">已登记费用</th></tr>
+        </thead>
+        <tbody>
+        {% for r in cost_ref.lines %}
+          <tr><td class="num">{{ r.seq or loop.index }}</td>
+              <td class="muted small">{{ r.contract_code or "—" }}</td>
+              <td>{{ r.name }}</td>
+              <td class="num">{{ money(r.amount) }}</td>
+              <td class="num">{{ money(r.cost) }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="hint">
+      上面还没勾合同，或者勾的合同还没有【合同清单】。
+      先勾好合同（可从报价转过来），再回来算。
+    </p>
+    {% endif %}
+    <p class="hint">
+      成本按什么口径扣（含不含运费、要不要分摊人工、哪些费用算进去）由你判断，
+      所以这里只给参考、不自动填进明细。
+    </p>
+  </section>
+  {% endif %}
+
+  {% for spec in ent.details or [] %}
+  <section class="sub-panel" data-detail='{{ spec | tojson }}'>
+    <div class="sub-head">
+      <h3>{{ spec.title }}</h3>
+      <div class="btn-row">
+        {% if spec.import and not is_new %}
+          <a class="btn btn-sm" href="{{ url_for('items_template') }}">下载导入模板</a>
+        {% endif %}
+        <button class="btn btn-sm" type="button"
+                onclick="addDetailRow('{{ spec.key }}')">+ 添加一行</button>
+      </div>
+    </div>
+    {% if spec.import %}
+    <p class="hint">
+      一行一项。品牌 / 型号 / 参数填了就自动进「品牌型号库」，下次直接下拉选；
+      型号选好后参数、单位、参考单价会自动带出来。
+      【含税方式】选「不含税」时，这一行的【税点】会自动变成 0%。
+      {% if not is_new %}也可以【下载导入模板】→ 填好 → 在页面底部上传导入。{% endif %}
+    </p>
+    {% else %}
+    {% if key == 'private_settlements' %}
+    <p class="hint">
+      一行对应合同里的一个清单项：<b>收入金额 − 扣税金额 − 成本 = 应付居间人</b>，
+      其中 <b>扣税金额 = 收入金额 × 扣税比例</b>。<br>
+      <b>不挂清单项的成本</b>（运费、临时人工这类）直接加一行：
+      【所属合同】留空或选一张（留空＝共同成本）、<b>名称手填、收入留 0、只填成本</b> ——
+      这一行的【应付居间人】是负的，单头「收入 − 扣税 − 成本」的合计照样对得上。<br>
+      【扣税比例】是<b>我们自己设定</b>的 —— 名义上叫扣税，实际是我方的收入，
+      <b>跟发票税点不是一个意思</b>，所以这里既不联动合同的含税口径，也不从发票税率带；
+      逐行手填（可以填 12.5 这种小数），留空按 0 算。
+      默认值到「参数设置」里的 <code>private_tax_rate</code> 改。
+      每行都一样时，用下面的【批量设置】一次刷完。<br>
+      先选【所属合同】再选【对应合同清单项】，项目名称、收入金额会自动带出来（可再改），
+      所属合同也会跟着清单项钉好；成本手工填，上面的参考面板会列出
+      「费用支出」里已经登记的金额。改完保存，四个合计数自动汇总回本单。
+    </p>
+    {% elif key == 'handovers' %}
+    <p class="hint">
+      一行一台设备（录像机 / 门禁主机 / 交换机…）：IP、子网掩码、网关、端口、
+      用户名和口令都照设备上实际配的填，没有的留空。<br>
+      【IP 地址】可以直接写范围 —— 一个机柜 10 个摄像头不用开 10 行，
+      写 <b>192.168.20.11-20</b> 就行；分属不同网段用「、」隔开
+      （<b>10.0.0.11-13、10.0.1.11-13</b>）。
+    </p>
+    {% else %}
+    <p class="hint">
+      一行对应合同清单里的一个项目，填清楚这笔钱花在哪几样东西上。
+      可选范围跟着上面的【关联合同】走，先选合同再挑清单项。
+    </p>
+    {% endif %}
+    {% endif %}
+    {# 明细上方那排批量工具：能统一的列由 spec.bulk 声明
+       （下拉列自动进，数字列要在 meta 里显式声明）。
+       只应用你在这里主动填/选过的项，没动的原样不变。 #}
+    {% if spec.bulk %}
+    <div class="bulk-bar">
+      <span class="bulk-title">批量设置</span>
+      {% for c in spec.bulk %}
+        <label class="bulk-item">
+          <span>{{ c.label }}</span>
+          {% if c.type == 'pct' %}
+            <span class="bulk-pct-wrap">
+              <input type="number" step="0.01" min="0" max="100"
+                     class="bulk-select" data-bulk="{{ c.name }}" placeholder="不改">
+              <span class="bulk-pct">%</span>
+            </span>
+          {% else %}
+            <select data-bulk="{{ c.name }}" class="bulk-select">
+              <option value="">（不改）</option>
+              {% for o in c.options or [] %}
+                <option value="{{ o }}">{{ o }}</option>
+              {% endfor %}
+            </select>
+          {% endif %}
+        </label>
+      {% endfor %}
+      <button class="btn btn-sm" type="button"
+              onclick="applyBulkDetail('{{ spec.key }}')">应用到全部行</button>
+      <span class="muted small" data-bulk-note="{{ spec.key }}"></span>
+    </div>
+    {% endif %}
+    {# 列多的明细表（工程交付资料·设备清单）在手机上竖排成卡片；
+       其它明细表保持表格 + 横向滚动 #}
+    <div class="table-wrap{% if key == 'handovers' %} card-wrap{% endif %}">
+      <table class="grid detail-table{% if key == 'handovers' %} card-on-mobile{% endif %}"
+             id="detail_{{ spec.key }}">
+        <thead>
+          <tr>
+            {% for c in spec.cols %}
+              <th style="width:{{ c.w }}" class="{% if c.type in ('money','number') %}num{% endif %}">{{ c.label }}</th>
+            {% endfor %}
+            <th style="width:4%"></th>
+          </tr>
+        </thead>
+        <tbody>
+        {# 已有明细在服务端渲染出来：万一本页 JS 没跑起来，
+           保存时也不会把已经录好的明细覆盖成空（新增行才由 JS 追加）。 #}
+        {% for r in (detail_rows.get(spec.key) or []) %}
+          <tr>
+          {% for c in spec.cols %}
+            {% set fname = 'd_' ~ spec.key ~ '_' ~ c.name %}
+            {% set val = r.get(c.name) %}
+            <td data-label="{{ c.label }}">
+            {% if c.type == 'hidden' %}
+              <input type="hidden" name="{{ fname }}" value="{{ val if val is not none else '' }}">
+            {% elif c.type == 'contract' %}
+              {# 这一行属于哪张合同：留空＝共同成本（纯成本行可以不指定） #}
+              <select name="{{ fname }}" class="dt-cell dt-contract">
+                <option value="">（共同成本）</option>
+                {% for cid, cname in contract_pick or [] %}
+                  <option value="{{ cid }}"{% if val is not none and val|string == cid|string %} selected{% endif %}>{{ cname }}</option>
+                {% endfor %}
+              </select>
+            {% elif c.type == 'contractitem' %}
+              <select name="{{ fname }}" class="dt-cell dt-citem">
+                <option value="">— 请选择合同清单项 —</option>
+                {% if key == 'private_settlements' %}
+                  {# 一行可能属于不同合同：写了【所属合同】就只看那张合同的清单项，
+                     没写就按合同分组全给（多合同时不容易选错） #}
+                  {% set rc = r.get('row_contract_id') %}
+                  {% if rc %}
+                    {% for cg in citem_groups or [] %}
+                      {% if cg['contract_id'] == rc %}
+                        {% for it in cg['items'] %}
+                          <option value="{{ it['id'] }}"{% if val == it['id'] %} selected{% endif %}>{{ it['label'] }}</option>
+                        {% endfor %}
+                      {% endif %}
+                    {% endfor %}
+                  {% else %}
+                    {% for cg in citem_groups or [] %}
+                      <optgroup label="{{ cg['label'] }}">
+                        {% for it in cg['items'] %}
+                          <option value="{{ it['id'] }}"{% if val == it['id'] %} selected{% endif %}>{{ it['label'] }}</option>
+                        {% endfor %}
+                      </optgroup>
+                    {% endfor %}
+                  {% endif %}
+                {% else %}
+                  {% for it in contract_items_json %}
+                    {% if not master_contract or it.contract_id == master_contract %}
+                      <option value="{{ it.id }}" {% if val == it.id %}selected{% endif %}>{{ it.label }}</option>
+                    {% endif %}
+                  {% endfor %}
+                {% endif %}
+              </select>
+            {% elif c.type in ('brand', 'model', 'unit') %}
+              <input type="text" class="dt-cell dt-{{ c.type }}" name="{{ fname }}"
+                     value="{{ val or '' }}"
+                     list="{{ {'brand': 'dlBrand', 'model': 'dlModel', 'unit': 'dlUnit'}[c.type] }}">
+            {% elif c.type == 'select' %}
+              {# 固定选项 / 字典下拉（含税、税点）：选项在「基础资料 → 下拉选项」里维护 #}
+              <select name="{{ fname }}" class="dt-cell">
+                {% if not c.required %}<option value=""></option>{% endif %}
+                {% for o in c.options or [] %}
+                  <option value="{{ o }}"{% if val is not none and val|string == o|string %} selected{% endif %}>{{ o }}</option>
+                {% endfor %}
+              </select>
+            {% elif c.type == 'pct' %}
+              {# 百分数（如扣税比例）：手填，入库时规范成 "13%"；这里再换算回数字显示 #}
+              <span class="dt-pct-wrap">
+                <input type="number" step="0.01" min="0" max="100"
+                       class="dt-cell num" name="{{ fname }}"
+                       value="{{ pct_num(val) }}" placeholder="0"
+                       {% if c.ro %}readonly{% endif %}>
+                <span class="dt-pct">%</span>
+              </span>
+            {% elif c.type in ('money', 'number') %}
+              <input type="number" step="0.01" class="dt-cell num" name="{{ fname }}"
+                     value="{% if val not in (none, '') %}{{ '%g'|format(val|float(0)) }}{% endif %}"
+                     {% if c.ro %}readonly{% endif %}
+                     {% if c.calc %}data-calc="{{ c.calc }}"{% endif %}>
+            {% else %}
+              <input type="text" class="dt-cell" name="{{ fname }}" value="{{ val or '' }}">
+            {% endif %}
+            </td>
+          {% endfor %}
+            <td><button class="btn btn-sm btn-danger dt-del" type="button" title="删除本行">×</button></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if spec.sum %}
+    <div class="settle-summary" data-detail-sum="{{ spec.key }}">
+      {% for col in spec.sum %}
+        {% set lbl = (spec.cols | selectattr('name', 'equalto', col) | list) %}
+        <span>{{ lbl[0].label if lbl else col }} 合计：<b data-sum="{{ col }}">0.00</b></span>
+      {% endfor %}
+      {% if spec.totals %}
+        <span class="muted small">保存时自动回填「明细合计 / 报价总额」</span>
+      {% endif %}
+    </div>
+    {% endif %}
+    {% if spec.import and not is_new %}
+    {# 导入不能用嵌套 <form>：HTML 会把内层 </form> 当成外层表单的结束标签，
+       于是下面的【保存】按钮掉到表单外面，点了完全没反应。
+       改用 HTML5 的 form 属性关联一个放在主表单之后的空表单。 #}
+    <div class="import-bar">
+      <span class="muted small">导入 Excel / CSV 明细：</span>
+      <input type="file" name="file" accept=".xlsx,.csv" required
+             form="importform_{{ spec.key }}">
+      <button class="btn btn-sm btn-primary" type="submit"
+              form="importform_{{ spec.key }}">导入并追加</button>
+    </div>
+    {% endif %}
+  </section>
+  {% endfor %}
+
+  {% if ent.attachments and is_new %}
+  <section class="sub-panel">
+    <div class="sub-head"><h3>合同原件（可选）</h3></div>
+    <label class="field">
+      <span>上传原件</span>
+      <input type="file" name="files" multiple
+             accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.bmp,.tif,.tiff,.txt,.zip,.rar,.7z,.dwg">
+      <span class="hint">录入时就把合同扫件 / PDF 选好，<b>点保存后自动归档到这张单据</b>，
+        不用先存一遍再进编辑上传（单次合计不超过 {{ max_upload_mb }} MB，可多选）。
+        漏选了也不要紧：保存后还能在「编辑 → 合同原件 → 管理附件」里补传。</span>
+    </label>
+  </section>
+  {% endif %}
+
+  <div class="form-actions">
+    {% if can_write('e', key) %}
+      <button class="btn btn-primary" type="submit">{{ '保存，处理下一张' if imp else '保存' }}</button>
+    {% else %}
+      <span class="muted">当前账号对这个页面是<b>只读</b>权限，不能保存</span>
+    {% endif %}
+    <a class="btn" href="{{ url_for('entity_list', key=key) }}">取消</a>
+    {% if not is_new and can_write('e', key) %}
+      <a class="btn" href="{{ url_for('entity_new', key=key) }}">复制为新增</a>
+    {% endif %}
+  </div>
+</form>
+
+{# 导入明细用的空表单：真正的控件在明细区里，靠 form="importform_xxx" 关联过来。
+   放在主表单之外，避免嵌套 <form> 把【保存】按钮挤到表单外面。 #}
+{% if not is_new and row %}
+  {% for spec in ent.details or [] %}
+    {% if spec.import %}
+    <form method="post" id="importform_{{ spec.key }}"
+          action="{{ url_for('entity_import', key=key, rid=row['id']) }}"
+          enctype="multipart/form-data"></form>
+    {% endif %}
+  {% endfor %}
+{% endif %}
+
+{% if key == 'private_settlements' and not is_new %}
+<section class="sub-panel">
+  <div class="sub-head">
+    <h3>对私计算输出</h3>
+    <a class="btn" href="{{ url_for('private_xlsx', rid=row['id']) }}">导出对私计算单 Excel</a>
+  </div>
+  <p class="hint">
+    计算口径：<b>应付居间人 = 收入 − 扣税（收入 × 税点）− 成本</b>。
+    导出的 Excel 带明细分项、四项合计与合计大写，可以打印给居间人核对签字。
+  </p>
+</section>
+{% endif %}
+
+{% if key == 'quotations' and not is_new %}
+<section class="sub-panel">
+  <div class="sub-head">
+    <h3>报价单输出与转合同</h3>
+    <div class="btn-row">
+      <a class="btn" href="{{ url_for('entity_xlsx', key=key, rid=row['id']) }}">导出报价单 Excel</a>
+      {% if quote_contract %}
+        <a class="btn" href="{{ url_for('entity_edit', key='contracts', rid=quote_contract['id']) }}">
+          查看已转合同 {{ quote_contract['code'] }}</a>
+      {% else %}
+        {% if is_approver or row.get('handler_user_id') == cur_uid %}
+        <form method="post" class="inline"
+              action="{{ url_for('quotation_to_contract', rid=row['id']) }}"
+              onsubmit="return confirm('按这份报价生成合同？合同金额与清单会一起带过去。');">
+          <button class="btn btn-primary" type="submit">转为合同</button>
+        </form>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+  <p class="hint">
+    导出的 Excel 是排版好的正式报价单（抬头、明细、合计大写、报价说明、签字栏）。
+    转成合同后，报价状态自动变成「已转合同」，合同里会出现对应的【合同清单】。
+  </p>
+</section>
+{% endif %}
+
+{% if key == 'deliveries' and not is_new %}
+<section class="sub-panel">
+  <div class="sub-head">
+    <h3>送货单输出</h3>
+    <div class="btn-row">
+      <a class="btn" href="{{ url_for('delivery_docx', rid=row['id']) }}">导出 Word 送货单</a>
+      {% if row.get('contract_id') %}
+        <a class="btn" href="{{ url_for('entity_edit', key='contracts', rid=row['contract_id']) }}">返回合同</a>
+      {% endif %}
+    </div>
+  </div>
+  <p class="hint">导出的 Word 可直接打印，交给收货人核对签字回执。</p>
+</section>
+{% endif %}
+
+{% if key == 'contracts' and not is_new %}
+<section class="sub-panel">
+  <div class="sub-head">
+    <h3>送货单</h3>
+    <div class="btn-row">
+      <a class="btn btn-primary" href="{{ url_for('contract_new_delivery', rid=row['id']) }}">
+        生成送货单</a>
+      <a class="btn" href="{{ url_for('entity_list', key='deliveries') }}">全部送货单</a>
+      <a class="btn" href="{{ url_for('contract_profile', rid=row['id']) }}">
+        合同全景（开票 / 收付款 / 利润）</a>
+    </div>
+  </div>
+  {% if contract_deliveries %}
+  <div class="table-wrap">
+    <table class="grid">
+      <thead>
+        <tr><th>送货单号</th><th>送货日期</th><th>收货人</th>
+            <th class="num">项数</th><th class="num">合计数量</th><th>状态</th>
+            <th class="ops-col">操作</th></tr>
+      </thead>
+      <tbody>
+      {% for d in contract_deliveries %}
+        <tr>
+          <td><a href="{{ url_for('entity_edit', key='deliveries', rid=d.id) }}">{{ d.code }}</a></td>
+          <td>{{ d.deliver_date or '' }}</td>
+          <td>{{ d.receiver or '' }}</td>
+          <td class="num">{{ d.item_count }}</td>
+          <td class="num">{{ d.total_qty | num }}</td>
+          <td><span class="tag">{{ d.status or '' }}</span></td>
+          <td class="ops-col">
+            <a class="btn btn-sm" href="{{ url_for('entity_edit', key='deliveries', rid=d.id) }}">编辑</a>
+            <a class="btn btn-sm" href="{{ url_for('delivery_docx', rid=d.id) }}">导出 Word</a>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="hint">还没有给这张合同发过货。点【生成送货单】→ 勾选这次要送的清单项与数量。</p>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if key == 'invoices' and invoice_stats %}
+<section class="sub-panel">
+  <div class="sub-head"><h3>核销情况</h3>
+    <span class="tag {% if invoice_stats.state == '已结清' %}tag-ok{% elif invoice_stats.state == '部分收付' %}tag-warn{% endif %}">{{ invoice_stats.state }}</span>
+  </div>
+  <div class="kv">
+    <div><span>价税合计</span><b>{{ money(invoice_stats.gross) }}</b></div>
+    <div><span>已核销</span><b>{{ money(invoice_stats.settled) }}</b></div>
+    <div><span>未核销</span><b>{{ money(invoice_stats.remaining) }}</b></div>
+  </div>
+  <div class="table-wrap">
+  <table class="grid">
+    <thead><tr><th>付款单号</th><th>付款日期</th><th class="num">核销金额</th><th class="num">比例</th></tr></thead>
+    <tbody>
+    {% for r in invoice_stats.details %}
+      <tr><td>{{ r.code }}</td><td>{{ r.pay_date or '' }}</td>
+          <td class="num">{{ money(r.amount) }}</td><td class="num">{{ percent(r.ratio) }}</td></tr>
+    {% else %}
+      <tr><td colspan="4" class="empty">还没有付款核销这张发票</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+
+{% if ent.attachments and not is_new %}
+<section class="sub-panel">
+  <div class="sub-head"><h3>合同原件</h3>
+    <a class="btn btn-sm" href="{{ url_for('contract_files', key=key, rid=row['id']) }}">管理附件</a>
+  </div>
+  {% if attachments %}
+    <ul class="filelist">
+      {% for a in attachments %}
+        <li>
+          <a href="{{ url_for('file_view', aid=a['id']) }}" target="_blank">{{ a.orig_name }}</a>
+          <span class="muted">{{ human_size(a.size) }} · {{ a.uploaded_at }}</span>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="muted small">尚未上传合同原件，点“管理附件”可上传 PDF / Word / 图片。</p>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if key == 'invoices' and not is_new %}
+{# ---------- 进项发票自动生成的那条费用：类别与对应清单项在这里调 ----------
+   两个下拉用 form="mainform" 关联到主表单（面板在主表单外面，不能嵌套 form）。 #}
+<section class="sub-panel cost-panel">
+  <div class="sub-head">
+    <h3>对应的费用支出</h3>
+    {% if invoice_cost %}
+      <a class="btn btn-sm"
+         href="{{ url_for('entity_edit', key='costs', rid=invoice_cost['id']) }}">打开这条费用</a>
+    {% endif %}
+  </div>
+  {% if invoice_cost %}
+  <div class="cost-grid">
+    <div><span>费用单号</span><b>{{ invoice_cost.code }}</b></div>
+    <div><span>金额（价税合计）</span><b>{{ money(invoice_cost.amount) }}</b></div>
+    <div><span>支付状态</span>
+      <b class="{% if invoice_cost.pay_status == '已支付' %}cost-paid{% endif %}">
+        {{ invoice_cost.pay_status or '未支付' }}</b></div>
+    <div><span>费用类别</span>
+      {# 类别已经在发票表单的【费用类别】里选（发票自己的字段），这里只显示结果 #}
+      <b>
+        {% set cid = invoice_cost.category | string %}
+        {% for cc_id, cc_name in cost_cats %}
+          {% if cc_id | string == cid %}{{ cc_name }}{% endif %}
+        {% endfor %}
+        {% if not invoice_cost.category %}<span class="muted small">未选（已按票面猜）</span>{% endif %}
+      </b>
+      <div class="muted small">要改去上面发票表单的【费用类别】</div>
+    </div>
+    <div class="cost-item-cell"><span>对应合同清单项</span>
+      {% if cost_items_pick %}
+        <select name="cost_item_id" form="mainform">
+          <option value="">（不对应）</option>
+          {% for it in cost_items_pick %}
+            <option value="{{ it['id'] }}"
+              {% if invoice_cost['items'] and invoice_cost['items']|length == 1
+                    and invoice_cost['items'][0].contract_item_id == it['id'] %}selected{% endif %}>
+              {{ it.name }}{% if it.spec %} / {{ it.spec }}{% endif %}</option>
+          {% endfor %}
+        </select>
+      {% else %}
+        <span class="muted small">
+          {% if row.contract_id %}这张合同还没有清单项{% else %}这张发票没挂合同{% endif %}
+          —— 先去合同里加清单，或挂上合同</span>
+      {% endif %}
+      {% if invoice_cost['items'] and invoice_cost['items']|length > 1 %}
+        <div class="muted small">已拆到 {{ invoice_cost['items']|length }} 个清单项，
+          要改拆分去「打开这条费用」。</div>
+      {% endif %}
+    </div>
+  </div>
+  <p class="hint">
+    这条费用是这张进项发票<b>自动生成</b>的：金额＝价税合计（含税），一生成就计入项目成本；
+    发票上的项目 / 合同 / 往来单位会带过来。
+    发票状态改成【已收讫】→ 这里变「已支付」；改成【已作废】→ 这条费用会一起删掉。
+  </p>
+  {% else %}
+  <p class="muted small">
+    {% if row.direction == '收到进项发票' %}
+      {% if row.status == '已作废' %}这张进项发票已作废，不会生成费用。
+      {% else %}这张进项发票还没有对应的费用（保存一次就会自动生成）。{% endif %}
+    {% else %}销项发票（我们开出去的）不生成费用支出；只有「收到进项发票」才会。{% endif %}
+  </p>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if ent.settlements %}
+<script id="invoiceData" type="application/json">{{ settlements_json|tojson }}</script>
+<script id="settleRows" type="application/json">{{ settlement_rows|tojson }}</script>
+{% endif %}
+
+{% if ent.details %}
+<script id="detailSpecs" type="application/json">{{ (ent.details or [])|tojson }}</script>
+<script id="brandData" type="application/json">{{ brands_json|tojson }}</script>
+<script id="modelData" type="application/json">{{ models_json|tojson }}</script>
+<script id="unitData" type="application/json">{{ units_json|tojson }}</script>
+<script id="contractItemData" type="application/json">{{ contract_items_json|tojson }}</script>
+{% if contract_pick %}<script id="contractPickData" type="application/json">{{ contract_pick|tojson }}</script>{% endif %}
+<script id="masterContractField" type="application/json">"contract_id"</script>
+{% endif %}
+{% endblock %}

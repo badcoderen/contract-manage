@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}项目授权 · {{ u.display_name or u.username }} · {{ app_title }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h2 class="page-title">项目授权 <span class="muted">/ {{ u.display_name or u.username }}</span></h2>
+  <div class="page-actions">
+    <a class="btn" href="{{ url_for('user_list') }}">返回用户管理</a>
+  </div>
+</div>
+
+<div class="note">
+  决定这名员工能看到、能录入哪些项目的费用与单据。勾选后保存在下方；
+  <b>「负责员工」</b>是在项目资料里直接指定的，会自动生效，不需要在这里重复勾选。
+</div>
+
+<form method="post" class="form">
+  <div class="table-wrap">
+  <table class="grid">
+    <thead><tr><th style="width:8%">授权</th><th style="width:14%">项目编号</th>
+      <th style="width:36%">项目名称</th><th style="width:20%">来源</th></tr></thead>
+    <tbody>
+    {% for p in projects %}
+      <tr>
+        <td><input type="checkbox" name="project_id" value="{{ p.id }}"
+                   {% if p.id in granted %}checked{% endif %}></td>
+        <td>{{ p.code or '' }}</td>
+        <td>{{ p.name or '' }}</td>
+        <td>
+          {% if p.id in managed %}<span class="tag tag-ok">项目负责人</span>{% endif %}
+          {% if p.id in granted %}<span class="tag tag-admin">已授权</span>{% endif %}
+          {% if p.id not in managed and p.id not in granted %}<span class="muted small">未授权</span>{% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="4" class="empty">还没有项目，先去「项目管理」建档</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <div class="form-actions">
+    <button class="btn btn-primary" type="submit">保存授权</button>
+    <a class="btn" href="{{ url_for('user_list') }}">取消</a>
+  </div>
+</form>
+{% endblock %}

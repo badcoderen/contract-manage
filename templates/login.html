@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>登录 · {{ company_name }}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body class="login-body">
+<div class="login-card">
+  <h1>{{ company_name }}</h1>
+  <p class="login-title">{{ app_title }}</p>
+  <p class="login-sub">请使用管理员分配的账号登录</p>
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% for cat, m in msgs %}<div class="flash flash-{{ cat }}">{{ m }}</div>{% endfor %}
+  {% endwith %}
+  {% if not is_admin_env %}
+    <div class="flash flash-error">
+      系统里还没有可用的管理员账号，请用 <code>tools/reset_password.py</code> 创建一个。
+    </div>
+  {% endif %}
+  <form method="post">
+    <label>用户名
+      <input type="text" name="username" autocomplete="username" autofocus required
+             maxlength="32">
+    </label>
+    <label>密码
+      <input type="password" name="password" autocomplete="current-password" required
+             maxlength="128">
+    </label>
+    <button class="btn btn-primary btn-block" type="submit">登录</button>
+  </form>
+  <p class="login-tip">
+    连续输错 {{ max_fails }} 次将锁定 {{ lock_min }} 分钟。首次登录会被要求修改密码。
+  </p>
+  <p class="login-ver">v{{ app_version }} · 正式版（{{ release_date }}）</p>
+</div>
+</body>
+</html>

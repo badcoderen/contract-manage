@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}出勤审批 · {{ app_title }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h2 class="page-title">出勤审批</h2>
+  <div class="page-actions">
+    <a class="btn" href="{{ url_for('payroll') }}">工资与补贴测算</a>
+    <a class="btn btn-primary" href="{{ url_for('export_attendance') }}">导出 Excel（出勤汇总）</a>
+  </div>
+</div>
+<div class="note">
+  批准后的加班、请假、出差会自动进入「工资与补贴测算」参与加班费、扣款与出差补贴的计算。
+  出差单回程日期为空时表示「未定」，回程后由本人补填即可。
+</div>
+
+<section class="panel">
+  <h3>加班待审批（{{ pend.overtime|length }}）</h3>
+  <div class="table-wrap">
+  <table class="grid">
+    <thead><tr><th>加班单号</th><th>加班人</th><th>日期</th><th>项目</th>
+      <th class="num">时长(小时)</th><th>事由</th><th class="ops-col">操作</th></tr></thead>
+    <tbody>
+    {% for r in pend.overtime %}
+      <tr>
+        <td><a href="{{ url_for('entity_edit', key='overtime', rid=r.id) }}">{{ r.code or '' }}</a></td>
+        <td>{{ r.employee_name or '' }}</td><td>{{ r.d1 or '' }}</td>
+        <td>{{ r.project_name or '' }}</td>
+        <td class="num">{{ (r.hours or 0) | num }}</td>
+        <td>{{ r.reason or '' }}</td>
+        <td class="ops-col">
+          {% if is_approver %}
+          <form method="post" action="{{ url_for('attend_action', tbl='overtime', rid=r.id, action='approve') }}" class="inline">
+            <input type="text" name="memo" placeholder="意见" class="ops-memo">
+            <button class="btn btn-sm btn-primary" type="submit">批准</button></form>
+          <form method="post" action="{{ url_for('attend_action', tbl='overtime', rid=r.id, action='reject') }}" class="inline">
+            <button class="btn btn-sm btn-danger" type="submit">驳回</button></form>
+          {% else %}<span class="muted small">只读</span>{% endif %}
+        </td>
+      </tr>
+    {% else %}<tr><td colspan="7" class="empty">没有待审批的加班</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="panel">
+  <h3>请假待审批（{{ pend.leaves|length }}）</h3>
+  <div class="table-wrap">
+  <table class="grid">
+    <thead><tr><th>请假单号</th><th>请假人</th><th>类型</th><th>开始</th><th>结束</th>
+      <th class="num">天数</th><th>事由</th><th class="ops-col">操作</th></tr></thead>
+    <tbody>
+    {% for r in pend.leaves %}
+      <tr>
+        <td><a href="{{ url_for('entity_edit', key='leaves', rid=r.id) }}">{{ r.code or '' }}</a></td>
+        <td>{{ r.employee_name or '' }}</td><td>{{ r.leave_type or '' }}</td>
+        <td>{{ r.d1 or '' }}</td><td>{{ r.d2 or '' }}</td>
+        <td class="num">{{ (r.days or 0) | num }}</td>
+        <td>{{ r.reason or '' }}</td>
+        <td class="ops-col">
+          {% if is_approver %}
+          <form method="post" action="{{ url_for('attend_action', tbl='leaves', rid=r.id, action='approve') }}" class="inline">
+            <input type="text" name="memo" placeholder="意见" class="ops-memo">
+            <button class="btn btn-sm btn-primary" type="submit">批准</button></form>
+          <form method="post" action="{{ url_for('attend_action', tbl='leaves', rid=r.id, action='reject') }}" class="inline">
+            <button class="btn btn-sm btn-danger" type="submit">驳回</button></form>
+          {% else %}<span class="muted small">只读</span>{% endif %}
+        </td>
+      </tr>
+    {% else %}<tr><td colspan="8" class="empty">没有待审批的请假</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="panel">
+  <h3>出差待审批（{{ pend.trips|length }}）</h3>
+  <div class="table-wrap">
+  <table class="grid">
+    <thead><tr><th>出差单号</th><th>出差人</th><th>出差地点</th><th>出发</th><th>回程</th>
+      <th class="num">天数</th><th>项目</th><th>事由</th><th class="ops-col">操作</th></tr></thead>
+    <tbody>
+    {% for r in pend.trips %}
+      <tr>
+        <td><a href="{{ url_for('entity_edit', key='trips', rid=r.id) }}">{{ r.code or '' }}</a></td>
+        <td>{{ r.employee_name or '' }}</td><td>{{ r.destination or '' }}</td>
+        <td>{{ r.d1 or '' }}</td>
+        <td>{% if r.d2 == '未定' %}<span class="tag tag-warn">未定</span>{% else %}{{ r.d2 or '' }}{% endif %}</td>
+        <td class="num">{{ (r.days or 0) | num }}</td>
+        <td>{{ r.project_name or '' }}</td>
+        <td>{{ r.reason or '' }}</td>
+        <td class="ops-col">
+          {% if is_approver %}
+          <form method="post" action="{{ url_for('attend_action', tbl='trips', rid=r.id, action='approve') }}" class="inline">
+            <input type="text" name="memo" placeholder="意见" class="ops-memo">
+            <button class="btn btn-sm btn-primary" type="submit">批准</button></form>
+          <form method="post" action="{{ url_for('attend_action', tbl='trips', rid=r.id, action='reject') }}" class="inline">
+            <button class="btn btn-sm btn-danger" type="submit">驳回</button></form>
+          {% else %}<span class="muted small">只读</span>{% endif %}
+        </td>
+      </tr>
+    {% else %}<tr><td colspan="9" class="empty">没有待审批的出差单</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endblock %}

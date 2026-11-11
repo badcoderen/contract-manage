@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% block title %}调整工资明细 · {{ app_title }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h2 class="page-title">调整工资明细 <span class="muted">/ {{ r.name }} · {{ ym }}</span></h2>
+  <div class="page-actions">
+    <a class="btn" href="{{ url_for('payroll', ym=ym) }}">返回工资表</a>
+  </div>
+</div>
+
+{% if r.leave_note %}
+<div class="note note-warn">
+  <b>{{ r.leave_note }}</b> ——
+  系统按「花名册标准 × 在职天数比例」给了折算后的一版：
+  基础工资、岗位津贴、出勤天数、餐补都算到离职日（加班费仍按完整月标准的时薪算）。
+  <br>
+  <b>不对就直接改下面的数字</b>；保存后这一行就<b>以你填的为准</b>，
+  系统不会再用离职折算把它盖回去（要恢复折算值可以点工资表页的【整月按规则重算】）。
+</div>
+{% endif %}
+
+{% if seal.sealed %}
+<div class="note note-warn">
+  <b>{{ ym }} 是封存月份</b>，你已填原因解锁：{{ seal.reason }}
+  <span class="muted small">（{{ seal.actor }} · {{ seal.at }}）</span>。
+  改完请回到工资表点【改完重新锁定】。
+</div>
+{% endif %}
+
+<div class="note">
+  下面这些数字是系统按<b>人社部计薪口径</b>自动算出来的
+  （当月计薪天数 {{ r.payable_days | num }} 天，日工资 {{ money(r.daily) }} 元，
+  小时工资 {{ money(r.hourly) }} 元）。
+  可以直接改任何一项；<b>保存后本月即为定稿</b>，重新测算不会覆盖这里改过的值。
+</div>
+
+<div class="kv">
+  <div><span>加班小时（考勤）</span><b>{{ r.ot_weekday | num }} + {{ r.ot_weekend | num }}</b>
+    <span class="muted small">（工作日 / 周日）</span></div>
+  <div><span>请假天数</span><b>{{ r.leave_days | num }}</b></div>
+  <div><span>计薪天数</span><b>{{ r.work_days | num }}</b>
+    <span class="muted small">（当月 {{ r.payable_days | num }} 个工作日）</span></div>
+  <div><span>社保缴费基数</span><b>{{ money(r.social_base) }}</b></div>
+  <div><span>专项附加扣除</span><b>{{ money(r.tax_deduct) }}</b></div>
+</div>
+
+<form method="post" class="form" id="mainform">
+  <section class="sub-panel">
+    <div class="sub-head"><h3>出勤 / 加班 / 出差（直接录入，自动算钱）</h3></div>
+    <div class="field-grid">
+      <div class="field">
+        <label for="f_work_days">计薪天数<span class="muted small">（周一至周六 − 法定假日 + 调休）</span></label>
+        <input type="number" step="0.5" id="f_work_days" name="work_days"
+               value="{{ r.work_days | num }}">
+      </div>
+      <div class="field">
+        <label for="f_ot_hours">加班时数<span class="muted small">（没提申请也直接填）</span></label>
+        <input type="number" step="0.5" id="f_ot_hours" name="ot_hours"
+               value="{{ r.ot_hours | num }}">
+      </div>
+      <div class="field">
+        <label for="f_trip_days">出差天数<span class="muted small">（含出海）</span></label>
+        <input type="number" step="0.5" id="f_trip_days" name="trip_days"
+               value="{{ r.trip_days | num }}">
+      </div>
+    </div>
+    <p class="hint">
+      日工资 <b>{{ money(r.daily) }}</b>（基础工资 ÷ 当月计薪天数 {{ r.payable_days | num }}），
+      小时工资 <b>{{ money(r.hourly) }}</b>。
+      <br>加班费 = 加班时数 × 小时工资 × {{ params.ot_rate_weekday | num }}（倍数在参数设置里改）；
+      出差费 = 出差天数 × 日工资（口径见参数 trip_pay_mode；fixed 时按每天
+      {{ money(params.trip_allowance_per_day) }} 元）。
+      <br>餐补 =（计薪天数 + 加班时数 ÷ {{ params.hours_per_day | num }} 的整数部分）×
+      {{ money(params.meal_office_per_day) }} + 出差天数 × {{ money(params.meal_trip_per_day) }}。
+      <b>改上面三个数，下面的加班费 / 出差补贴 / 餐补会自动跟着变</b>，也可以再手工微调。
+    </p>
+  </section>
+
+  <section class="sub-panel">
+    <div class="sub-head"><h3>应发工资</h3></div>
+    <div class="field-grid">
+      {% for f, label, cap in [
+        ('base_salary','基础工资','月标准'),
+        ('post_salary','岗位津贴',''),
+        ('bonus','奖金',''),
+        ('sea_allow','出海补贴',''),
+        ('trip_allow','出差费','出差天数 × 日工资'),
+        ('other_allow','其他补贴',''),
+        ('overtime','加班费','自动算，可覆盖'),
+        ('meal_allow','餐补','自动算，可覆盖'),
+        ('welfare','福利金','只在端午 / 中秋月'),
+        ('heat_allow','高温补贴','6/7/8 月自动')] %}
+      <div class="field">
+        <label for="f_{{ f }}">{{ label }}{% if cap %}<span class="muted small">（{{ cap }}）</span>{% endif %}</label>
+        <input type="number" step="0.01" id="f_{{ f }}" name="{{ f }}" value="{{ r[f] | num }}">
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="sub-panel">
+    <div class="sub-head"><h3>扣款统计</h3></div>
+    <div class="field-grid">
+      {% for f, label, cap in [
+        ('pension','养老保险','基数 × 8%'),
+        ('medical','医疗保险','基数 × 2%'),
+        ('serious_ill','大病补充','定额'),
+        ('unemployment','失业保险','基数 × 0.5%'),
+        ('fund','公积金','个人月缴额'),
+        ('annuity','企业年金',''),
+        ('other_deduct','其他扣款',''),
+        ('tax','个人所得税','累计预扣法')] %}
+      <div class="field">
+        <label for="f_{{ f }}">{{ label }}{% if cap %}<span class="muted small">（{{ cap }}）</span>{% endif %}</label>
+        <input type="number" step="0.01" id="f_{{ f }}" name="{{ f }}" value="{{ r[f] | num }}">
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="sub-panel">
+    <div class="sub-head"><h3>其它</h3></div>
+    <div class="field-grid">
+      <div class="field">
+        <label for="f_work_days">计薪出勤天数</label>
+        <input type="number" step="0.5" id="f_work_days" name="work_days" value="{{ r.work_days | num }}">
+        <div class="hint">用于餐补核对：非出差出勤天数</div>
+      </div>
+      <div class="field">
+        <label for="f_extra_pay">其他补发</label>
+        <input type="number" step="0.01" id="f_extra_pay" name="extra_pay" value="{{ r.extra_pay | num }}">
+        <div class="hint">实发工资 = 应发小计 + 其他补发 − 扣款小计</div>
+      </div>
+      <div class="field span2">
+        <label for="f_memo">备注</label>
+        <textarea id="f_memo" name="memo" rows="2">{{ r.memo or '' }}</textarea>
+      </div>
+    </div>
+  </section>
+
+  <div class="form-actions">
+    <button class="btn btn-primary" type="submit">保存（本月定稿）</button>
+    <a class="btn" href="{{ url_for('payroll', ym=ym) }}">取消</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var D = {
+    daily: {{ r.daily | num or 0 }},
+    hourly: {{ r.hourly | num or 0 }},
+    otRate: {{ params.ot_rate_weekday | num or 0 }},
+    mealOffice: {{ params.meal_office_per_day | num or 0 }},
+    mealTrip: {{ params.meal_trip_per_day | num or 0 }},
+    hoursPerDay: {{ params.hours_per_day | num or 8 }},
+    tripMode: "{{ params.trip_pay_mode }}",
+    tripFixed: {{ params.trip_allowance_per_day | num or 0 }}
+  };
+  function n(id) {
+    var el = document.getElementById(id);
+    var v = parseFloat(el && el.value);
+    return isNaN(v) ? 0 : v;
+  }
+  function set(id, v) {
+    var el = document.getElementById(id);
+    if (el) el.value = (Math.round(v * 100) / 100).toFixed(2);
+  }
+  function recalc() {
+    var wd = n('f_work_days'), ot = n('f_ot_hours'), trip = n('f_trip_days');
+    set('f_overtime', ot * D.hourly * D.otRate);
+    set('f_trip_allow', D.tripMode === 'fixed' ? trip * D.tripFixed : trip * D.daily);
+    var otDays = D.hoursPerDay > 0 ? Math.floor(ot / D.hoursPerDay) : 0;
+    set('f_meal_allow', (wd + otDays) * D.mealOffice + trip * D.mealTrip);
+  }
+  ['f_work_days', 'f_ot_hours', 'f_trip_days'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('change', recalc);
+  });
+})();
+</script>
+{% endblock %}

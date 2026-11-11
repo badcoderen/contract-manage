@@ -1,0 +1,367 @@
+{% extends "base.html" %}
+{% block title %}{{ p.p.code }} 项目全景 · {{ app_title }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h2 class="page-title">
+    <span class="muted">{{ p.p.code }}</span> {{ p.p.name }}
+  </h2>
+  <div class="page-actions">
+    <a class="btn" href="{{ url_for('entity_edit', key='projects', rid=p.p.id) }}">编辑项目</a>
+    <a class="btn" href="{{ url_for('entity_list', key='contracts', q=p.p.name) }}">合同列表</a>
+    <a class="btn" href="{{ url_for('entity_list', key='invoices', q=p.p.name) }}">发票列表</a>
+    <a class="btn" href="{{ url_for('entity_list', key='costs', q=p.p.name) }}">费用支出</a>
+    <a class="btn" href="{{ url_for('index') }}">返回首页</a>
+  </div>
+</div>
+
+<div class="cards">
+  <div class="card">
+    <div class="card-label">收入合同额</div>
+    <div class="card-value">{{ money(p.income) }}</div>
+    <div class="card-foot">支出合同 {{ money(p.contract_cost) }}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">累计收款</div>
+    <div class="card-value">{{ money(p.received) }}</div>
+    <div class="card-foot">收款占收入 {{ percent(p.received / p.income if p.income else 0) }}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">费用合计</div>
+    <div class="card-value">{{ money(p.cost_total) }}</div>
+    <div class="card-foot">已付 {{ money(p.cost_paid) }}</div>
+  </div>
+  <div class="card card-hl">
+    <div class="card-label">预计毛利</div>
+    <div class="card-value">{{ money(p.profit) }}</div>
+    <div class="card-foot">毛利率 {{ percent(p.profit_rate) }}
+      {% if p.income_fallback %}<span class="fb-mark" title="没有收入合同，收入按已开销项发票 / 累计收款算">✳</span>{% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="cards">
+  <div class="card">
+    <div class="card-label">销项已开票合计</div>
+    <div class="card-value">{{ money(p.sale.gross) }}</div>
+    <div class="card-foot">{{ p.sale.count }} 张（不含作废票）</div>
+  </div>
+  <div class="card">
+    <div class="card-label">销项已收（已收讫）</div>
+    <div class="card-value">{{ money(p.sale.paid) }}</div>
+    <div class="card-foot">已核销 {{ money(p.sale.settled) }}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">未结清发票</div>
+    <div class="card-value">{{ p.sale.open_n }} 张</div>
+    <div class="card-foot">未结金额 {{ money(p.sale.open) }}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">进项发票（成本）</div>
+    <div class="card-value">{{ money(p.buy.gross) }}</div>
+    <div class="card-foot">{{ p.buy.count }} 张 · 已付 {{ money(p.buy.paid) }}</div>
+  </div>
+</div>
+
+<section class="panel">
+  <div class="sub-head">
+    <h3>项目信息</h3>
+    <span class="muted small">累计付款（付款记录支出 ＋ 费用已付）：<b>{{ money(p.paid_out) }}</b></span>
+  </div>
+  <div class="kv">
+    <div><span>项目编号</span><b>{{ p.p.code or '—' }}</b></div>
+    <div><span>项目名称</span><b>{{ p.p.name }}</b></div>
+    <div><span>业主单位</span><b>{{ p.p.owner_name or '—' }}</b></div>
+    <div><span>项目地点</span><b>{{ p.p.location or '—' }}</b></div>
+    <div><span>项目经理</span><b>{{ p.p.manager or '—' }}</b></div>
+    <div><span>负责员工</span><b>{{ p.p.manager_name or '—' }}</b></div>
+    <div><span>开工日期</span><b>{{ p.p.start_date or '—' }}</b></div>
+    <div><span>竣工日期</span><b>{{ p.p.end_date or '—' }}</b></div>
+    <div><span>项目状态</span><b>{{ p.p.status or '—' }}</b></div>
+    <div><span>项目预算</span><b>{{ money(p.p.budget) }}</b></div>
+  </div>
+  {% if p.p.memo %}<p class="hint">备注：{{ p.p.memo }}</p>{% endif %}
+</section>
+
+<section class="panel">
+  <div class="sub-head">
+    <h3>合同（{{ p.contracts|length }} 张）</h3>
+    <span class="muted small">收入 {{ money(p.income) }} ／ 支出 {{ money(p.contract_cost) }}</span>
+  </div>
+  <div class="table-wrap">
+    <table class="grid">
+      <thead>
+        <tr><th>合同编号</th><th>合同名称</th><th>方向</th><th>类别</th>
+            <th>对方单位</th><th>签订日期</th><th class="num">金额</th><th>状态</th></tr>
+      </thead>
+      <tbody>
+      {% for c in p.contracts %}
+        <tr>
+          <td><a href="{{ url_for('contract_profile', rid=c.id) }}">{{ c.code or '' }}</a></td>
+          <td>{{ c.name or '' }}</td>
+          <td>{{ c.direction or '' }}</td>
+          <td>{{ c.category or '' }}</td>
+          <td>{{ c.unit_name or '' }}</td>
+          <td>{{ c.sign_date or '' }}</td>
+          <td class="num">{{ money(c.amount_gross) }}</td>
+          <td>{{ c.status or '' }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="8" class="empty">这个项目还没有登记合同</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="sub-head">
+    <h3>销项发票（开给客户，按合同分组）</h3>
+    <span class="muted small">共 {{ p.sale.count }} 张，价税合计 {{ money(p.sale.gross) }}，
+      已收讫 {{ money(p.sale.paid) }}，{{ p.sale.open_n }} 张未结清</span>
+  </div>
+  <div class="table-wrap">
+    <table class="grid">
+      <thead>
+        <tr><th>发票号码</th><th>开票日期</th><th>对方单位</th>
+            <th class="num">价税合计</th><th class="num">已核销</th>
+            <th class="num">未结清</th><th>状态</th></tr>
+      </thead>
+      {% for g in p.sale_groups %}
+      <tbody>
+        <tr style="background:#eef3f7;font-weight:600">
+          <td colspan="7">
+            {% if g.unlinked %}未挂合同（项目级销项票）
+            {% else %}合同 <a href="{{ url_for('contract_profile', rid=g.contract_id) }}">{{ g.code or '' }}</a>
+              {{ g.name or '' }}{% endif %}
+            <span class="muted small">· 共 {{ g.totals.count }} 张 · 价税合计 {{ money(g.totals.gross) }}
+              · 已收讫 {{ money(g.totals.paid) }} · 未结清 {{ g.totals.open_n }} 张（{{ money(g.totals.open) }}）</span>
+          </td>
+        </tr>
+        {% for r in g.rows %}
+        <tr>
+          <td><a href="{{ url_for('entity_edit', key='invoices', rid=r.id) }}">{{ r.no or '' }}</a></td>
+          <td>{{ r.issue_date or '' }}</td>
+          <td>{{ r.unit_name or '' }}</td>
+          <td class="num">{{ money(r.amount_gross) }}</td>
+          <td class="num">{{ money(r.settled) }}</td>
+          <td class="num">{{ money(r.open) }}</td>
+          <td><span class="tag {% if r.status == '已收讫' %}tag-ok{% elif r.status == '已作废' %}tag-danger{% else %}tag-warn{% endif %}">{{ r.status or '' }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      {% else %}
+      <tbody><tr><td colspan="7" class="empty">这个项目还没有开过销项发票</td></tr></tbody>
+      {% endfor %}
+      {% if p.invoices_sale %}
+      <tfoot>
+        <tr style="background:#f7f9fb;font-weight:600">
+          <td colspan="3">合计（不含作废票）</td>
+          <td class="num">{{ money(p.sale.gross) }}</td>
+          <td class="num">{{ money(p.sale.settled) }}</td>
+          <td class="num">{{ money(p.sale.open) }}</td>
+          <td></td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="sub-head">
+    <h3>进项发票（成本，按合同分组）</h3>
+    <span class="muted small">共 {{ p.buy.count }} 张，价税合计 {{ money(p.buy.gross) }}
+      ／ 已付 {{ money(p.buy.paid) }}；类别决定这笔成本算到哪一类费用</span>
+  </div>
+  <div class="table-wrap">
+    <table class="grid">
+      <thead>
+        <tr><th>发票号码</th><th>开票日期</th><th>对方单位</th><th>费用类别</th>
+            <th class="num">价税合计</th><th class="num">已核销</th><th>状态</th></tr>
+      </thead>
+      {% for g in p.buy_groups %}
+      <tbody>
+        <tr style="background:#eef3f7;font-weight:600">
+          <td colspan="7">
+            {% if g.unlinked %}未挂合同（项目级进项票）
+            {% else %}合同 <a href="{{ url_for('contract_profile', rid=g.contract_id) }}">{{ g.code or '' }}</a>
+              {{ g.name or '' }}{% endif %}
+            <span class="muted small">· 共 {{ g.totals.count }} 张 · 价税合计 {{ money(g.totals.gross) }}
+              · 已付 {{ money(g.totals.paid) }}</span>
+          </td>
+        </tr>
+        {% for r in g.rows %}
+        <tr>
+          <td><a href="{{ url_for('entity_edit', key='invoices', rid=r.id) }}">{{ r.no or '' }}</a></td>
+          <td>{{ r.issue_date or '' }}</td>
+          <td>{{ r.unit_name or '' }}</td>
+          <td>
+            {% if r.category_name %}<span class="tag">{{ r.category_name }}</span>
+            {% else %}<span class="muted small">未选（默认按票面猜）</span>{% endif %}
+          </td>
+          <td class="num">{{ money(r.amount_gross) }}</td>
+          <td class="num">{{ money(r.settled) }}</td>
+          <td><span class="tag {% if r.status == '已收讫' %}tag-ok{% elif r.status == '已作废' %}tag-danger{% else %}tag-warn{% endif %}">{{ r.status or '' }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      {% else %}
+      <tbody><tr><td colspan="7" class="empty">这个项目还没有进项发票</td></tr></tbody>
+      {% endfor %}
+      {% if p.invoices_buy %}
+      <tfoot>
+        <tr style="background:#f7f9fb;font-weight:600">
+          <td colspan="4">合计（不含作废票）</td>
+          <td class="num">{{ money(p.buy.gross) }}</td>
+          <td class="num">{{ money(p.buy.settled) }}</td>
+          <td></td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="sub-head">
+    <h3>收付款记录（按合同分组）</h3>
+    <span class="muted small">收款 {{ money(p.received) }} ／ 付款记录 {{ money(p.pay_rec_out) }}（另有费用已付 {{ money(p.cost_paid) }}）</span>
+  </div>
+  <div class="table-wrap">
+    <table class="grid">
+      <thead>
+        <tr><th>单号</th><th>日期</th><th>方向</th><th>款项性质</th>
+            <th class="num">金额</th><th>方式</th><th>经办人</th></tr>
+      </thead>
+      {% for g in p.pay_groups %}
+      <tbody>
+        <tr style="background:#eef3f7;font-weight:600">
+          <td colspan="7">
+            {% if g.unlinked %}未挂合同（项目级收付款）
+            {% else %}合同 <a href="{{ url_for('contract_profile', rid=g.contract_id) }}">{{ g.code or '' }}</a>
+              {{ g.name or '' }}{% endif %}
+            <span class="muted small">· {{ g.totals.n }} 笔 · 收款 {{ money(g.totals['in']) }}
+              ／ 付款 {{ money(g.totals.out) }}</span>
+          </td>
+        </tr>
+        {% for r in g.rows %}
+        <tr>
+          <td><a href="{{ url_for('entity_edit', key='payments', rid=r.id) }}">{{ r.code or '' }}</a></td>
+          <td>{{ r.pay_date or '' }}</td>
+          <td>{{ r.direction or '' }}</td>
+          <td>{{ r.nature or '' }}</td>
+          <td class="num">{{ money(r.amount) }}</td>
+          <td>{{ r.pay_method or '' }}</td>
+          <td>{{ r.handler or '' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      {% else %}
+      <tbody><tr><td colspan="7" class="empty">这个项目还没有收付款记录</td></tr></tbody>
+      {% endfor %}
+    </table>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="sub-head">
+    <h3>费用（按类别汇总）</h3>
+    <span class="muted small">合计 {{ money(p.cost_total) }}，已付 {{ money(p.cost_paid) }}</span>
+  </div>
+  <div class="table-wrap">
+    <table class="grid">
+      <thead>
+        <tr><th>费用类别</th><th class="num">笔数</th>
+            <th class="num">金额</th><th class="num">已付金额</th>
+            <th class="num">占费用比例</th></tr>
+      </thead>
+      <tbody>
+      {% for r in p.cats %}
+        <tr>
+          <td>{{ r.name }}</td>
+          <td class="num">{{ r.n }}</td>
+          <td class="num">{{ money(r.amount) }}</td>
+          <td class="num">{{ money(r.paid) }}</td>
+          <td class="num">{{ percent(r.amount / p.cost_total if p.cost_total else 0) }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="empty">这个项目还没有费用记录</td></tr>
+      {% endfor %}
+      </tbody>
+      {% if p.cats %}
+      <tfoot>
+        <tr style="background:#f7f9fb;font-weight:600">
+          <td>合计</td>
+          <td class="num">{{ p.cats | sum(attribute='n') }}</td>
+          <td class="num">{{ money(p.cost_total) }}</td>
+          <td class="num">{{ money(p.cost_paid) }}</td>
+          <td class="num">{{ percent(1 if p.cost_total else 0) }}</td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="sub-head">
+    <h3>最近费用明细</h3>
+    <a class="btn btn-sm" href="{{ url_for('entity_list', key='costs', q=p.p.name) }}">去费用支出管理</a>
+  </div>
+  <div class="table-wrap">
+    <table class="grid">
+      <thead>
+        <tr><th>日期</th><th>单号</th><th>类别</th><th>摘要</th>
+            <th class="num">金额</th><th>支付状态</th><th class="num">已付</th></tr>
+      </thead>
+      <tbody>
+      {% for r in p.costs %}
+        <tr>
+          <td>{{ r.cost_date or '' }}</td>
+          <td><a href="{{ url_for('entity_edit', key='costs', rid=r.id) }}">{{ r.code or '' }}</a></td>
+          <td>{{ r.category_name or '' }}</td>
+          <td>{{ r.summary or '' }}</td>
+          <td class="num">{{ money(r.amount) }}</td>
+          <td>{{ r.pay_status or '' }}</td>
+          <td class="num">{{ money(r.paid_amount) }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="empty">这个项目还没有费用记录</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{% if p.priv %}
+<section class="panel">
+  <div class="sub-head">
+    <h3>对私结算</h3>
+    <span class="muted small">我方利润（扣税） {{ money(p.p_profit) }} ／ 返还居间人 {{ money(p.p_payable) }}</span>
+  </div>
+  <div class="table-wrap">
+    <table class="grid">
+      <thead>
+        <tr><th>单号</th><th>名称</th><th>日期</th><th>居间人</th>
+            <th class="num">收入</th><th class="num">我方利润</th>
+            <th class="num">应付居间人</th><th>状态</th></tr>
+      </thead>
+      <tbody>
+      {% for r in p.priv %}
+        <tr>
+          <td><a href="{{ url_for('entity_edit', key='private_settlements', rid=r.id) }}">{{ r.code or '' }}</a></td>
+          <td>{{ r.title or '' }}</td>
+          <td>{{ r.calc_date or '' }}</td>
+          <td>{{ r.broker or '' }}</td>
+          <td class="num">{{ money(r.amount_income) }}</td>
+          <td class="num">{{ money(r.amount_tax) }}</td>
+          <td class="num">{{ money(r.amount_payable) }}</td>
+          <td>{{ r.status or '' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

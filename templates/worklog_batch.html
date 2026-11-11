@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}批量记工 · {{ app_title }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h2 class="page-title">批量记工</h2>
+  <div class="page-actions">
+    <a class="btn" href="{{ url_for('worklog_sheet') }}">返回月表</a>
+  </div>
+</div>
+
+<div class="note note-quiet">
+  一次给<b>一批人</b>记<b>连续的一段时间</b>。比如「1 号到 5 号，这 4 个人」选好人和日期提交即可，
+  系统会按天逐条生成。<b>已经记过的那天会自动跳过</b>，不会重复算钱。
+  <br>日工资留空 = 用工人名单里各自的默认日工资；要统一按 450 记，就在这里填 450。
+</div>
+
+<form method="post" action="{{ url_for('worklog_batch') }}" id="batchForm">
+  <div class="panel">
+    <div class="form-grid">
+      <label>
+        <span>从</span>
+        <input type="date" name="date_from" required value="{{ today }}">
+      </label>
+      <label>
+        <span>到</span>
+        <input type="date" name="date_to" required value="{{ today }}">
+      </label>
+      <label>
+        <span>所属项目</span>
+        <select name="project_id">
+          <option value="">— 不指定 —</option>
+          {% for p in projects %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>
+        <span>日工资（留空用各自的）</span>
+        <input type="text" name="rate" inputmode="decimal" placeholder="如 450，留空按工人默认">
+      </label>
+      <label>
+        <span>每天记多少工</span>
+        <select name="days">
+          <option value="1">1（整天）</option>
+          <option value="0.5">0.5（半天）</option>
+        </select>
+      </label>
+      <label>
+        <span>备注（可选）</span>
+        <input type="text" name="memo" placeholder="如 支模、加班">
+      </label>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="pick-head">
+      <h3>选人（{{ workers|length }} 人在用）</h3>
+      <div class="pick-tools">
+        <button class="btn btn-sm" type="button" id="pickAll">全选</button>
+        <button class="btn btn-sm" type="button" id="pickNone">全不选</button>
+        <span class="muted small">已选 <b id="pickCount">0</b> 人</span>
+      </div>
+    </div>
+    {% if workers %}
+    <div class="worker-pick">
+      {% for w in workers %}
+      <label class="wp-item">
+        <input type="checkbox" name="worker_ids" value="{{ w.id }}">
+        <span class="wp-name">{{ w.name }}</span>
+        <span class="wp-meta">{{ w.trade or '—' }} ｜ {{ money(w.rate) }}</span>
+      </label>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty">还没有工人，先去 <a href="{{ url_for('entity_new', key='workers') }}">工人名单</a> 加人。</p>
+    {% endif %}
+  </div>
+
+  <div class="form-actions">
+    <button class="btn btn-primary" type="submit">生成记工</button>
+    <span class="muted small">提示：同一个人同一天只会有一条（第二次提交会跳过）</span>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var boxes = document.querySelectorAll('input[name="worker_ids"]');
+  var cnt = document.getElementById('pickCount');
+  function sync() {
+    var n = 0;
+    boxes.forEach(function (b) { if (b.checked) n++; });
+    if (cnt) cnt.textContent = n;
+  }
+  boxes.forEach(function (b) { b.addEventListener('change', sync); });
+  var all = document.getElementById('pickAll');
+  var none = document.getElementById('pickNone');
+  if (all) all.onclick = function () {
+    boxes.forEach(function (b) { b.checked = true; }); sync();
+  };
+  if (none) none.onclick = function () {
+    boxes.forEach(function (b) { b.checked = false; }); sync();
+  };
+  sync();
+})();
+</script>
+{% endblock %}

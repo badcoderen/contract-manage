@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}用户管理 · {{ app_title }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h2 class="page-title">用户管理</h2>
+  <div class="page-actions">
+    <a class="btn" href="{{ url_for('user_logs') }}">登录日志</a>
+    <a class="btn btn-primary" href="{{ url_for('user_new') }}">+ 新增账号</a>
+  </div>
+</div>
+
+<div class="note">
+  角色说明：<b>{{ ROLE_LABELS['admin'] }}</b> —— {{ ROLE_DESC['admin'] }}；
+  <b>{{ ROLE_LABELS['finance'] }}</b> —— {{ ROLE_DESC['finance'] }}；
+  <b>{{ ROLE_LABELS['employee'] }}</b> —— {{ ROLE_DESC['employee'] }}。
+</div>
+
+{% with msgs = get_flashed_messages(with_categories=true) %}{% endwith %}
+
+<div class="table-wrap">
+<table class="grid">
+  <thead>
+    <tr><th>用户名</th><th>姓名</th><th>角色</th><th>状态</th>
+        <th>密码状态</th><th>最后登录</th><th>来源 IP</th><th class="ops-col">操作</th></tr>
+  </thead>
+  <tbody>
+  {% for u in users %}
+    <tr>
+      <td><b>{{ u.username }}</b>{% if u.id == me %} <span class="tag">当前</span>{% endif %}</td>
+      <td>{{ u.display_name or '' }}</td>
+      <td><span class="tag {% if u.role == 'admin' %}tag-admin{% elif u.role == 'finance' %}tag-finance{% endif %}">{{ ROLE_LABELS.get(u.role, u.role) }}</span></td>
+      <td>{% if u.enabled %}<span class="tag tag-ok">启用</span>{% else %}<span class="tag tag-warn">已停用</span>{% endif %}</td>
+      <td>{% if u.must_change_pwd %}<span class="tag tag-warn">待本人修改</span>{% else %}<span class="muted">已设定</span>{% endif %}</td>
+      <td>{{ u.last_login_at or '—' }}</td>
+      <td>{{ u.last_login_ip or '—' }}</td>
+      <td class="ops-col">
+        <a class="btn btn-sm" href="{{ url_for('user_edit', uid=u.id) }}">编辑</a>
+        {% if u.role != 'admin' %}
+          <a class="btn btn-sm" href="{{ url_for('user_pages', uid=u.id) }}">页面权限</a>
+        {% endif %}
+        {% if u.role == 'employee' %}
+          <a class="btn btn-sm" href="{{ url_for('user_access', uid=u.id) }}">项目授权</a>
+        {% endif %}
+        <a class="btn btn-sm" href="{{ url_for('user_reset_password', uid=u.id) }}">重置密码</a>
+        {% if u.id != me %}
+          <form method="post" action="{{ url_for('user_delete', uid=u.id) }}" class="inline"
+                onsubmit="return confirm('确认删除账号 {{ u.username }}？');">
+            <button class="btn btn-sm btn-danger" type="submit">删除</button>
+          </form>
+        {% endif %}
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="8" class="empty">还没有账号</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

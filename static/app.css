@@ -1,0 +1,891 @@
+:root {
+  --primary: #2b6cb0;
+  --primary-dark: #1f5288;
+  --primary-soft: #eaf2fb;
+  --danger: #c0392b;
+  --ok: #1e7e4f;
+  --warn: #b7791f;
+  --text: #1f2733;
+  --text-soft: #5c6773;
+  --text-mute: #8a949e;
+  --line: #e2e6ea;
+  --line-soft: #eef1f4;
+  --bg: #f4f6f8;
+  --panel: #ffffff;
+  --radius: 8px;
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB",
+               "Noto Sans CJK SC", "Source Han Sans SC", "WenQuanYi Micro Hei",
+               -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+a { color: var(--primary); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+h1, h2, h3 { margin: 0; font-weight: 600; }
+
+/* ------------------------------------------------------------- 顶栏
+   要点：顶栏元素绝不能换行。各块用 flex 收缩 + 省略号处理，
+   否则窄屏（iPhone 440px）下标题会溢出压到右侧用户名上、
+   「菜单」按钮会被压成一字一行。 */
+.topbar {
+  display: flex; align-items: center; gap: 12px;
+  /* 挤不下就换行 —— 绝不把品牌名压成一列竖字（华为等手机浏览器上
+     见过这种画面：顶栏六个元素硬塞一行，公司名被挤成"统/理/员"）。
+     flex-wrap 是最后的保险：任何宽度下最多是换成两行，不会挤坏。 */
+  flex-wrap: wrap; row-gap: 6px;
+  min-height: 58px; padding: 8px 18px;
+  background: var(--panel); border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; z-index: 20;
+}
+.brand { display: flex; flex-direction: column; line-height: 1.25;
+  /* 给品牌区一个下限宽度：宁可把公司名截断成"示例公司…"，
+     也不能让它缩到只剩一个字的宽度（那就会竖排/叠字） */
+  min-width: 120px; flex: 1 1 auto; overflow: hidden; }
+.brand-name { font-size: 16px; font-weight: 600; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.brand-sub { font-size: 12px; color: var(--text-mute); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; }
+.brand-ver { display: inline-block; margin-left: 6px; padding: 0 5px;
+  border: 1px solid var(--line); border-radius: 999px; font-size: 11px;
+  color: var(--text-soft); vertical-align: 1px; }
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 12px;
+  flex: 0 0 auto; }
+.topbar-right > * { flex: 0 0 auto; }
+.user { color: var(--text-soft); font-size: 13px; white-space: nowrap; }
+.navtoggle { display: none; white-space: nowrap; flex: 0 0 auto; }
+
+/* 侧栏里的账号区：仅小屏显示（把用户名/角色/改密从顶栏挪下来） */
+.side-user { display: none; }
+
+/* ------------------------------------------------------------- 布局 */
+.layout { display: flex; align-items: flex-start; }
+.sidebar {
+  width: 196px; flex: 0 0 196px; min-height: calc(100vh - 58px);
+  background: var(--panel); border-right: 1px solid var(--line);
+  padding: 10px 0 30px;
+}
+.nav-group {
+  padding: 14px 16px 6px; font-size: 12px; color: var(--text-mute);
+  letter-spacing: .5px;
+}
+.nav-item {
+  display: block; padding: 7px 16px 7px 18px; color: var(--text);
+  font-size: 13.5px; border-left: 3px solid transparent;
+}
+.nav-item:hover { background: var(--primary-soft); text-decoration: none; }
+.nav-item.active {
+  background: var(--primary-soft); border-left-color: var(--primary);
+  color: var(--primary-dark); font-weight: 600;
+}
+.content { flex: 1; min-width: 0; padding: 18px 22px 60px; }
+
+/* ------------------------------------------------------------- 通用 */
+.page-head {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.page-title { font-size: 19px; }
+.page-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+.btn {
+  display: inline-block; padding: 6px 13px; border: 1px solid var(--line);
+  border-radius: var(--radius); background: var(--panel); color: var(--text);
+  font-size: 13px; cursor: pointer; line-height: 1.5; white-space: nowrap;
+}
+.btn:hover { border-color: #c8cfd6; text-decoration: none; background: #fafbfc; }
+.btn-primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-dark); border-color: var(--primary-dark); }
+.btn-danger { color: var(--danger); border-color: #e6c3bf; }
+.btn-danger:hover { background: #fdf3f2; }
+.btn-ghost { background: transparent; }
+.btn-sm { padding: 3px 9px; font-size: 12.5px; }
+.btn-block { width: 100%; }
+.inline { display: inline; }
+
+.muted { color: var(--text-mute); }
+.small { font-size: 12.5px; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.empty { text-align: center; color: var(--text-mute); padding: 22px 0; }
+
+.note {
+  background: var(--primary-soft); border: 1px solid #cfe1f5;
+  border-radius: var(--radius); padding: 9px 13px; margin-bottom: 14px;
+  font-size: 13px; color: #23527c;
+}
+
+.flashes { margin-bottom: 12px; }
+.flash {
+  padding: 9px 13px; border-radius: var(--radius); margin-bottom: 8px;
+  font-size: 13.5px; border: 1px solid;
+}
+.flash-ok { background: #edf9f2; border-color: #c4e6d4; color: #1b6b45; }
+.flash-error { background: #fdf1f0; border-color: #eec9c5; color: #a33227; }
+
+.search { display: flex; gap: 6px; align-items: center; }
+.search input {
+  -webkit-appearance: none; appearance: none;
+  padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--radius);
+  font-size: 13px; font-family: inherit; line-height: 1.4; min-height: 34px;
+  min-width: 170px; height: 34px; background-color: #fff; color: var(--text);
+}
+.search select {
+  -webkit-appearance: none; appearance: none;
+  padding: 6px 28px 6px 10px; border: 1px solid var(--line);
+  border-radius: var(--radius); font-size: 13px; font-family: inherit;
+  line-height: 1.4; min-height: 34px; height: 34px;
+  background-color: #fff; color: var(--text);
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%235c6773' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 10px 6px;
+}
+
+/* ------------------------------------------------------------- 概览卡片 */
+.cards {
+  display: grid; gap: 12px; margin-bottom: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+.card {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 13px 15px;
+}
+.card-label { font-size: 12.5px; color: var(--text-mute); }
+.card-value { font-size: 20px; font-weight: 600; margin-top: 4px;
+  font-variant-numeric: tabular-nums; }
+.card-foot { font-size: 12px; color: var(--text-soft); margin-top: 2px; }
+.card-hl { background: var(--primary-soft); border-color: #cfe1f5; }
+.card-hl .card-value { color: var(--primary-dark); }
+
+.two-col { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+.two-col > * { min-width: 0; }   /* 同上：不让里面的表格把整页撑宽 */
+@media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+
+.panel, .sub-panel {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 14px 16px; margin-bottom: 14px;
+  /* grid/flex 里的项默认 min-width:auto —— 面板里只要有一张宽表格，
+     整页就会被撑得比屏幕还宽（320/360px 的老手机上会整页横向滚动）。
+     允许收缩之后，宽表格由 .table-wrap 自己横向滚，页面不再溢出。 */
+  min-width: 0;
+}
+.panel h3, .sub-panel h3 { font-size: 14.5px; margin-bottom: 10px; }
+.sub-head { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+.sub-head h3 { margin: 0; }
+.sub-head .btn { margin-left: auto; }
+
+/* ------------------------------------------------------------- 表格 */
+.table-wrap { overflow-x: auto; background: var(--panel);
+  border: 1px solid var(--line); border-radius: var(--radius); }
+table.grid { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+table.grid th, table.grid td {
+  padding: 7px 10px; border-bottom: 1px solid var(--line-soft);
+  text-align: left; vertical-align: middle;
+}
+/* ⚠️ 上面 `table.grid th/td` 的 (0,1,2) 特异性高于 `.num` 的 (0,1,0)，
+   `.num` 的 text-align:right 会被吃掉 —— 必须在这里补一条更具体的，
+   否则所有金额/数量/百分比列都是左对齐（表头与数字对不齐）。 */
+table.grid th.num, table.grid td.num { text-align: right; }
+table.grid thead th {
+  background: #f7f9fb; color: var(--text-soft); font-weight: 600;
+  font-size: 12.5px; white-space: nowrap;
+  border-bottom: 1px solid var(--line);
+}
+table.grid tbody tr:hover { background: #fafcfe; }
+table.grid tbody tr:last-child td { border-bottom: none; }
+table.grid .idx { width: 46px; color: var(--text-mute); font-size: 12px; }
+table.grid .ops-col { white-space: nowrap; width: 1%; }
+table.grid td.ops-col .btn { margin-right: 4px; }
+.panel table.grid { border: 1px solid var(--line-soft); border-radius: 6px; }
+
+.tag {
+  display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px;
+  background: #eef1f4; color: var(--text-soft); white-space: nowrap;
+}
+.tag-ok { background: #e6f6ee; color: var(--ok); }
+.tag-warn { background: #fdf4e3; color: var(--warn); }
+.tag-danger { background: #fdf1f0; color: var(--danger); }
+.tag-admin { background: #eaf2fb; color: var(--primary-dark); font-weight: 600; }
+.tag-finance { background: #efe9fb; color: #5b3fa8; font-weight: 600; }
+
+/* ------------------------------------------------------------- 弹窗 */
+.modal-mask {
+  position: fixed; inset: 0; z-index: 60; background: rgba(20, 28, 38, .42);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 40px 16px; overflow-y: auto;
+}
+.modal-mask[hidden] { display: none; }
+.modal {
+  width: 720px; max-width: 100%; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, .16);
+}
+.modal-head { display: flex; align-items: center; gap: 12px;
+  padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.modal-head h3 { margin: 0; font-size: 15px; }
+.modal-x { margin-left: auto; border: none; background: transparent;
+  font-size: 20px; line-height: 1; color: var(--text-mute); cursor: pointer;
+  padding: 0 4px; }
+.modal-x:hover { color: var(--text); }
+.modal-body { padding: 14px 18px; }
+.modal-sub { font-size: 13.5px; margin: 14px 0 6px; }
+.modal-foot { display: flex; gap: 10px; justify-content: flex-end;
+  padding: 12px 18px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+body.modal-open { overflow: hidden; }
+
+/* 审批行内输入 */
+.ops-memo {
+  width: 110px; padding: 3px 7px; margin-right: 4px;
+  border: 1px solid var(--line); border-radius: 6px;
+  font-size: 12.5px; font-family: inherit; height: 26px;
+  -webkit-appearance: none; appearance: none;
+}
+.reimb-strip .kv { margin-bottom: 0; }
+
+.note-warn { background: #fdf4e3; border-color: #f0dcb0; color: #7a5410; }
+.note-quiet { background: #f7f9fb; border-color: var(--line); color: var(--text-soft); }
+
+/* 选项卡条：同类功能平铺成一排，左侧菜单就不必堆一长串。
+   由 base.html 统一引入，只有属于某个选项卡组的页面才渲染。 */
+.tabs {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  margin-bottom: 14px; border-bottom: 2px solid var(--line);
+}
+.tabs-label { font-size: 13px; color: var(--text-mute); white-space: nowrap;
+  padding-bottom: 8px; }
+.tabs-items { display: flex; gap: 2px; flex-wrap: wrap; flex: 1 1 auto;
+  min-width: 0; }
+.tab {
+  display: inline-block; padding: 8px 14px; font-size: 13.5px;
+  color: var(--text-soft); text-decoration: none; white-space: nowrap;
+  border-bottom: 2px solid transparent; margin-bottom: -2px; border-radius: 4px 4px 0 0;
+}
+.tab:hover { color: var(--primary-dark); background: #f2f6fa; }
+.tab.active { color: var(--primary-dark); border-bottom-color: var(--primary);
+  font-weight: 600; }
+
+/* ------------------------------------------------------------- 提示与动作条 */
+.action-strip {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; flex-wrap: wrap;
+  padding: 12px 16px; margin-bottom: 14px;
+  background: #fdf4e3; border: 1px solid #f0dcb0; border-radius: var(--radius);
+}
+.action-strip-text { display: flex; flex-direction: column; gap: 3px;
+  min-width: 0; font-size: 13.5px; color: #7a5410; }
+.action-strip-text b { font-size: 14px; }
+.action-strip form { flex: 0 0 auto; }
+.form-narrow { max-width: 520px; }
+.login-tip { font-size: 12px; color: var(--text-mute); text-align: center;
+  margin: 14px 0 0; line-height: 1.5; }
+.login-ver { font-size: 11.5px; color: var(--text-mute); text-align: center;
+  margin: 10px 0 0; padding-top: 8px; border-top: 1px dashed var(--line-soft); }
+
+/* ------------------------------------------------------------- 公司标识 */
+.org-banner {
+  background: var(--panel); border: 1px solid var(--line);
+  border-left: 3px solid var(--primary);
+  border-radius: var(--radius); padding: 12px 16px; margin-bottom: 14px;
+}
+.org-banner-name { font-size: 17px; font-weight: 600; color: var(--text);
+  line-height: 1.35; }
+.org-banner-sub { font-size: 12.5px; color: var(--text-mute); margin-top: 3px; }
+
+.pager { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+.pager-btns { margin-left: auto; display: flex; gap: 6px; }
+
+/* ------------------------------------------------------------- 表单 */
+.form { background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 18px; }
+.field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 26px; }
+@media (max-width: 820px) { .field-grid { grid-template-columns: 1fr; } }
+.field { display: flex; flex-direction: column; }
+.field.span2 { grid-column: 1 / -1; }
+.field label { font-size: 13px; color: var(--text-soft); margin-bottom: 4px; }
+.field .req { color: var(--danger); margin-left: 3px; }
+/* 输入类控件统一外观。
+   为什么要 appearance:none —— iOS Safari 对 input / select / textarea
+   各有一套原生渲染，高度、内边距、文字基线都不一致，同一个表单里会出现
+   「有的框高有的框矮」「字不在框中间」。去掉原生外观后尺寸完全由 CSS 决定。 */
+.field input:not([type=checkbox]):not([type=radio]),
+.field select,
+.field textarea,
+.form input:not([type=checkbox]):not([type=radio]),
+.form select,
+.form textarea,
+#settleTable input:not([type=checkbox]),
+#settleTable select {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; padding: 7px 10px; border: 1px solid var(--line);
+  border-radius: 6px; font-size: 13.5px; font-family: inherit;
+  line-height: 1.4; min-height: 38px;
+  background-color: #fff; color: var(--text);
+}
+/* 单行控件统一固定高度：否则 input[type=date] 会比文本框高出 2px，
+   同一行里两个框高度不齐、文字看着就是「不在该在的位置」。 */
+.field input:not([type=checkbox]):not([type=radio]),
+.field select,
+.form input:not([type=checkbox]):not([type=radio]),
+.form select { height: 38px; }
+.field textarea, .form textarea { min-height: 66px; height: auto; }
+
+/* 只读展示区（审批状态 / 审批意见 / 由系统维护的状态）。
+   不用 disabled 输入框：灰掉的框看着像坏了，长文本也不好读。 */
+.ro-value {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  width: 100%; min-height: 38px; padding: 7px 12px;
+  border: 1px dashed var(--line); border-radius: 6px;
+  background: #f7f9fb; color: var(--text-soft);
+  font-size: 13.5px; line-height: 1.5; word-break: break-word;
+}
+.ro-value .muted { font-style: italic; }
+.ro-value.ro-memo { align-items: flex-start; min-height: 56px; white-space: pre-wrap; }
+.ro-value .tag { font-size: 12.5px; padding: 2px 10px; }
+
+/* 去掉原生外观后 select 不再有箭头，自己画一个 */
+.field select, .form select, #settleTable select {
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%235c6773' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 10px 6px;
+  padding-right: 30px;
+}
+.field input:focus, .field select:focus, .field textarea:focus,
+.form input:focus, .form select:focus, .form textarea:focus {
+  outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(43,108,176,.12);
+}
+.field input.readonly { background-color: #f6f8fa; color: var(--text-soft); }
+.field textarea { resize: vertical; }
+.hint { font-size: 12px; color: var(--text-mute); margin-top: 3px; }
+.check-inline { display: flex; align-items: center; gap: 6px; font-size: 13.5px;
+  color: var(--text); padding-top: 6px; }
+
+.form-actions { margin-top: 18px; display: flex; gap: 10px;
+  border-top: 1px solid var(--line-soft); padding-top: 14px; flex-wrap: wrap; }
+
+.settle-summary { display: flex; gap: 8px 24px; margin-top: 10px; font-size: 13.5px;
+  background: #f7f9fb; border: 1px solid var(--line-soft);
+  border-radius: 6px; padding: 9px 13px; flex-wrap: wrap; }
+.settle-summary b { font-variant-numeric: tabular-nums; }
+#settleTable select, #settleTable input {
+  padding: 5px 8px; font-size: 13px; line-height: 1.4; min-height: 34px; height: 34px;
+}
+.settle-remain { font-size: 11.5px; color: var(--text-mute); margin-top: 2px; }
+.settle-remain.over { color: var(--danger); }
+/* 选中的发票「公司 · 开票日期 · 发票号码」完整写一行 ——
+   下拉框本身会把长标签截掉，这行保证信息看得全 */
+.settle-inv { font-size: 11.5px; color: var(--text-soft); margin-top: 3px;
+  word-break: break-all; }
+
+/* 指标行：等宽列 + 自动换行。
+   原来用 flex（每项按自身文字宽度占位），指标名长短不一时列就"参差不齐"，
+   手机上尤其明显 —— 改成 grid 让每列同宽。 */
+.kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px 20px; margin-bottom: 10px; }
+.kv > div { display: flex; flex-direction: column; min-width: 0; }
+.kv span { font-size: 12px; color: var(--text-mute); }
+.kv b { font-size: 16px; font-variant-numeric: tabular-nums; }
+
+/* 备份页：路径用等宽字体（长路径要能折行），状态用彩色小字 */
+.mono-sm { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px; word-break: break-all; }
+.ok-text { color: var(--ok); }
+.bad-text { color: var(--danger); }
+details.panel > summary { list-style: none; }
+details.panel > summary::-webkit-details-marker { display: none; }
+/* 「备份到」这个输入框要能占满剩下的宽度（路径都挺长） */
+.dir-input { flex: 1 1 320px; min-width: 0; }
+
+.filelist { list-style: none; margin: 0; padding: 0; }
+.filelist li { padding: 7px 0; border-bottom: 1px dashed var(--line-soft);
+  display: flex; gap: 6px 12px; align-items: baseline; flex-wrap: wrap; }
+.filelist li > a:first-child { word-break: break-all; }
+.filelist li:last-child { border-bottom: none; }
+.upload { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.upload input[type=file] { font-size: 13px; }
+
+/* 报表表格横向滚动容器：报表列多时不撑破页面 */
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* ------------------------------------------------------------- 报表 */
+.report { background: #fff; padding: 20px 24px; border: 1px solid var(--line);
+  border-radius: var(--radius); }
+.report-head { text-align: center; margin-bottom: 14px; }
+.report-head h1 { font-size: 20px; letter-spacing: 2px; }
+.report-org { font-size: 16px; font-weight: 600; color: var(--text);
+  letter-spacing: 1px; padding-bottom: 8px; margin-bottom: 8px;
+  border-bottom: 1px solid var(--line); }
+.report-meta { font-size: 12px; color: var(--text-mute); margin-top: 4px; }
+table.report-table th, table.report-table td { font-size: 12.5px; }
+.report-foot { display: flex; justify-content: space-between; margin-top: 18px;
+  font-size: 12.5px; color: var(--text-soft); flex-wrap: wrap; gap: 6px 18px; }
+
+/* ------------------------------------------------------------- 登录 / 错误 */
+.login-body { display: flex; align-items: center; justify-content: center;
+  min-height: 100vh; min-height: 100dvh; background: var(--bg); }
+.login-card { width: 340px; max-width: calc(100vw - 32px); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 12px; padding: 26px 24px; }
+.login-card h1 { font-size: 17px; text-align: center; line-height: 1.35; }
+.login-title { text-align: center; color: var(--text-soft); font-size: 13px;
+  margin: 5px 0 0; }
+.login-sub { text-align: center; color: var(--text-mute); font-size: 12.5px;
+  margin: 6px 0 18px; }
+.login-card label { display: block; margin-bottom: 12px; font-size: 13px;
+  color: var(--text-soft); }
+.login-card input { width: 100%; margin-top: 4px; padding: 8px 10px;
+  -webkit-appearance: none; appearance: none;
+  border: 1px solid var(--line); border-radius: 6px;
+  font-size: 14px; font-family: inherit; line-height: 1.4; min-height: 40px; height: 40px;
+  color: var(--text); }
+.login-card input:focus { outline: none; border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(43,108,176,.12); }
+.error-page { text-align: center; padding: 70px 0; }
+.error-page h1 { font-size: 46px; color: var(--text-mute); }
+
+/* ------------------------------------------------------------- 小屏 */
+@media (max-width: 780px) {
+  /* 顶栏：菜单按钮不参与收缩，否则「菜单」会被压成一字一行 */
+  .navtoggle {
+    display: inline-block; padding: 8px 12px; border: 1px solid var(--line);
+    border-radius: 6px; background: #fff; font-size: 13px;
+    flex: 0 0 auto; white-space: nowrap;
+  }
+  .topbar { padding: 8px 12px; gap: 10px; }
+  .brand-sub { display: none; }
+  /* 用户名 / 角色 / 修改密码 在窄屏放不下，收进侧栏抽屉（见 .side-user） */
+  .topbar-aux { display: none; }
+  .topbar-right { gap: 8px; }
+
+  .side-user {
+    display: block; padding: 10px 16px 8px; margin-bottom: 4px;
+    border-bottom: 1px solid var(--line);
+  }
+  .side-user-row { display: flex; align-items: center; gap: 8px;
+    flex-wrap: wrap; margin-bottom: 4px; }
+  .side-user-name { font-size: 13.5px; font-weight: 600; color: var(--text);
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .sidebar { position: fixed; top: var(--topbar-h, 58px); left: -230px; bottom: 0;
+    z-index: 30;
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+    width: 220px; flex-basis: 220px; transition: left .18s; }
+  body.nav-open .sidebar { left: 0; box-shadow: 2px 0 10px rgba(0,0,0,.08); }
+  .content { padding: 14px 12px 50px; }
+  .page-actions { width: 100%; }
+
+  /* ★ 关键：控件字号必须 ≥ 16px。
+     iOS Safari 在聚焦字号小于 16px 的输入框时会自动放大整个页面，
+     放大后版面就"跑位"了。这是 iPhone 上文字位置不对的主要原因之一。 */
+  .field input:not([type=checkbox]):not([type=radio]),
+  .field select,
+  .field textarea,
+  .form input:not([type=checkbox]):not([type=radio]),
+  .form select,
+  .form textarea,
+  .search input,
+  .search select,
+  .ops-memo,
+  #settleTable input:not([type=checkbox]),
+  #settleTable select,
+  .login-card input:not([type=checkbox]) { font-size: 16px; }
+  .ro-value { font-size: 16px; }
+  .ro-value .tag { font-size: 14px; }
+
+  /* 选项卡在窄屏改为横向滚动，不然十来个标签会挤成好几行 */
+  .tabs { gap: 6px; }
+  .tabs-label { display: none; }
+  .tabs-items { flex-wrap: nowrap; overflow-x: auto;
+    -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
+  .tab { font-size: 14px; padding: 8px 12px; }
+  .field label, .form label { font-size: 13.5px; }
+  .hint { font-size: 12.5px; }
+  .check-inline { font-size: 14px; }
+
+  /* 表格在窄屏一律可横向滑动，避免撑破页面 */
+  .table-wrap, .report, .panel, .sub-panel {
+    -webkit-overflow-scrolling: touch;
+  }
+  .report-head h1 { font-size: 17px; letter-spacing: 1px; }
+  .report-org { font-size: 15px; letter-spacing: 0; }
+
+  .kv { gap: 8px 20px; }
+  .pager { flex-wrap: wrap; gap: 8px; }
+  .pager-btns { margin-left: 0; }
+
+  /* 列多的录入表在手机上由"表格"改成"一张卡片一条"。
+     6~8 列挤在 440px 里每列只剩几十像素，控件根本没法用
+     （发票列表、发票核销明细、工程交付资料的设备清单都吃这条）。
+     表头藏掉，每格用 td 上的 data-label 通过 ::before 显示标签。
+     ★ 只有显式加了 .card-on-mobile 的表才变 —— 其它明细表不受影响。
+     ⚠️ 选择器必须带 `table.grid`：`table.grid td` 的特异性是 (0,1,2)，
+        光写 `.card-on-mobile td` (0,1,1) 会被它压住（padding / border 留着表格
+        的行线、金额列也还是右对齐）。加上前缀升到 (0,3,2) 才稳。 */
+  .card-wrap { border: none; background: transparent; border-radius: 0; }
+  table.grid.card-on-mobile,
+  table.grid.card-on-mobile tbody,
+  table.grid.card-on-mobile tr,
+  table.grid.card-on-mobile td { display: block; width: auto; }
+  table.grid.card-on-mobile thead { display: none; }
+  table.grid.card-on-mobile tbody tr {
+    border: 1px solid var(--line); border-radius: 8px;
+    background: var(--panel); padding: 10px 12px; margin-bottom: 10px;
+  }
+  table.grid.card-on-mobile tbody tr:hover { background: var(--panel); }
+  table.grid.card-on-mobile td {
+    border: none; padding: 5px 0; white-space: normal;
+  }
+  table.grid.card-on-mobile td[data-label]:not([data-label=""])::before {
+    content: attr(data-label); display: block;
+    font-size: 12px; color: var(--text-mute); margin-bottom: 3px;
+  }
+  /* 卡片里数值靠左更像"标签 + 值"，右对齐反而散 */
+  table.grid.card-on-mobile td.num { text-align: left; }
+  table.grid.card-on-mobile select,
+  table.grid.card-on-mobile input { width: 100%; }
+  table.grid.card-on-mobile td:last-child { text-align: right; padding-top: 2px; }
+  /* 「操作」列在桌面端是 width:1% 的窄列（table.grid .ops-col 优先级更高），
+     手机上要让它占满整行，否则按钮被挤在 20px 里显示不全 */
+  table.grid.card-on-mobile td.ops-col {
+    width: auto; white-space: normal; text-align: right;
+  }
+
+  /* 发票核销明细再瘦一点：价税合计并成一行，核销金额 / 比例并排     （行之间没有空白字符，48% + 4% + 48% 正好一行放得下） */
+  #settleTable td[data-label="价税合计"] { display: flex; align-items: baseline; gap: 8px; }
+  #settleTable td[data-label="价税合计"]::before { margin-bottom: 0; }
+  #settleTable td[data-label="核销金额"],
+  #settleTable td[data-label="核销比例"] {
+    display: inline-block; width: 48%; vertical-align: top;
+  }
+  #settleTable td[data-label="核销金额"] { margin-right: 4%; }
+  /* 设备清单：IP + 端口一行、子网掩码 + 网关一行，省得一屏放不下两台设备 */
+  #detail_devices td[data-label="IP 地址"],
+  #detail_devices td[data-label="端口"] {
+    display: inline-block; width: 62%; vertical-align: top;
+  }
+  #detail_devices td[data-label="端口"] { width: 34%; margin-left: 4%; }
+  #detail_devices td[data-label="子网掩码"],
+  #detail_devices td[data-label="网关"] {
+    display: inline-block; width: 48%; vertical-align: top;
+  }
+  #detail_devices td[data-label="网关"] { margin-left: 4%; }
+}
+
+/* 超窄屏（320~400px 的老安卓 / 小屏手机）：品牌区下限再放宽一点，
+   保证顶栏仍然是一行 —— 换行虽然不会挤坏，但侧栏抽屉是按顶栏 58px 定位的。 */
+@media (max-width: 400px) {
+  .brand { min-width: 84px; }
+  .brand-name { font-size: 15px; }
+  .navtoggle { padding: 8px 10px; }
+}
+
+/* ------------------------------------------------------------- 打印 */
+@media print {
+  .table-scroll { overflow: visible; }
+  .no-print, .topbar, .sidebar, .flashes, .pager { display: none !important; }
+  body { background: #fff; }
+  .layout { display: block; }
+  .content { padding: 0; }
+  .report { border: none; padding: 0; border-radius: 0; }
+  table.grid thead th { background: #f0f0f0 !important; -webkit-print-color-adjust: exact; }
+  table.grid th, table.grid td { font-size: 11px; padding: 4px 6px;
+    border: 1px solid #999; }
+  table.grid { border-collapse: collapse; }
+  @page { size: A4 landscape; margin: 10mm; }
+}
+
+/* ---------------------------------------------------------------- 明细表
+   报价明细 / 合同清单 / 送货明细 这类"一行一项"的表格：
+   控件要比主表单矮一点，否则 10 行的表格会拉得很长。 */
+.detail-table td { padding: 4px 6px; }
+.detail-table th { padding: 7px 8px; }
+.form .detail-table input:not([type=checkbox]),
+.form .detail-table select {
+  height: 32px; min-height: 32px; padding: 4px 8px; font-size: 13px;
+}
+.form .detail-table input[readonly] { background: #f5f7fa; color: var(--text-soft); }
+.detail-table td:last-child { text-align: center; }
+.detail-table .btn-sm { padding: 3px 9px; line-height: 1.2; }
+
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.sub-head .btn-row { margin-left: auto; }
+
+.import-bar {
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line-soft);
+}
+.import-bar input[type=file] { font-size: 13px; width: auto; }
+
+/* ------------------------------------------------- 列表页内联下拉（报价状态）
+   不在 .form 里，得自己来一套，否则会退回原生外观、和旁边的按钮不一样高。 */
+.inline-select {
+  -webkit-appearance: none; appearance: none;
+  width: auto; min-width: 92px; height: 30px; min-height: 30px;
+  padding: 3px 26px 3px 9px; border: 1px solid var(--line); border-radius: 6px;
+  font-size: 13px; font-family: inherit; line-height: 1.3;
+  background-color: #fff; color: var(--text); cursor: pointer;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%235c6773' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 9px 5.5px;
+}
+.inline-select:focus { outline: none; border-color: var(--brand); }
+
+/* 送货勾选页：首列是勾选框、末列是数量，别套明细表那套居中规则 */
+#pickTable th:first-child, #pickTable td:first-child { text-align: center; }
+#pickTable td:last-child { text-align: left; }
+#pickTable input[type=checkbox] { width: 18px; height: 18px; margin: 0; }
+#pickTable tfoot td { background: #f7f9fb; font-weight: 600; }
+
+/* --------------------------------------------------- 明细上方的"批量设置"条
+   一行一项的表，逐个改下拉太累：这里选定口径一键刷全部行。 */
+.bulk-bar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin: 10px 0 12px; padding: 9px 12px;
+  border: 1px solid var(--line-soft); border-radius: 6px;
+  background: #f7f9fb; font-size: 13px;
+}
+.bulk-bar .bulk-title { color: var(--text-soft); font-weight: 600; }
+.bulk-bar .bulk-item {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin: 0; color: var(--text-soft); font-size: 13px;
+}
+.bulk-bar .bulk-select {
+  -webkit-appearance: none; appearance: none;
+  width: auto; min-width: 96px; height: 32px; min-height: 32px;
+  padding: 3px 26px 3px 9px; border: 1px solid var(--line); border-radius: 6px;
+  font-size: 13px; font-family: inherit; line-height: 1.3;
+  background-color: #fff; color: var(--text); cursor: pointer;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%235c6773' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 9px 5.5px;
+}
+.bulk-bar .bulk-select:focus { outline: none; border-color: var(--brand); }
+.bulk-bar [data-bulk-note] { flex: 1 1 100%; }
+
+/* ------------------------------------------------- 百分数列与批量设置里的百分数
+   输入框里只放数字（13），% 号靠这个后缀 span 显示；
+   number 输入框不能带 %，否则浏览器会把值清掉。 */
+.dt-pct-wrap, .bulk-pct-wrap { position: relative; display: block; }
+.bulk-pct-wrap { display: inline-block; }
+.dt-pct-wrap input, .bulk-pct-wrap input { padding-right: 20px; }
+.dt-pct, .bulk-pct {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  color: var(--text-soft); font-size: 12px; pointer-events: none;
+}
+
+/* --------------------------------------------- 关联合同多选（对私计算）
+   合同多的时候要能筛、能一眼看到勾了几张。 */
+.chk-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin: 8px 0 10px; }
+.form input.chk-filter {
+  width: auto; min-width: 200px; height: 32px; min-height: 32px;
+  padding: 4px 10px; font-size: 13px;
+}
+.chk-grid { display: grid; gap: 6px 14px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.chk-item { display: flex; align-items: center; gap: 7px; font-size: 13px;
+  padding: 4px 6px; border-radius: 6px; margin: 0; min-width: 0; }
+.chk-item:hover { background: #f5f7fa; }
+.chk-item input[type=checkbox] { width: 16px; height: 16px; margin: 0;
+  flex: 0 0 auto; }
+.chk-item span { min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+
+/* ------------------------------------------------ 对私计算的「结算看板」
+   收入 − 成本 − 我方利润 = 返还居间人，一行读完，别让人自己换算。 */
+.settle-board .board-row {
+  display: flex; align-items: stretch; gap: 8px; flex-wrap: wrap;
+  margin-top: 10px;
+}
+.settle-board .board-cell {
+  flex: 1 1 150px; min-width: 0;
+  padding: 10px 12px; border: 1px solid var(--line-soft); border-radius: 8px;
+  background: #f7f9fb;
+}
+.settle-board .board-cell span {
+  display: block; font-size: 12px; color: var(--text-soft); margin-bottom: 4px;
+}
+.settle-board .board-cell b {
+  font-size: 17px; font-variant-numeric: tabular-nums; word-break: break-all;
+}
+.settle-board .board-cell.is-profit { background: #fff7ec; border-color: #f3ddba; }
+.settle-board .board-cell.is-key { background: var(--brand-soft, #eef4ff);
+  border-color: #cfdcf5; }
+.settle-board .board-op {
+  display: flex; align-items: center; font-size: 18px; color: var(--text-mute);
+  flex: 0 0 auto;
+}
+@media (max-width: 780px) {
+  .settle-board .board-cell { flex: 1 1 45%; }
+  .settle-board .board-op { flex: 0 0 auto; }
+}
+
+/* ------------------------------------------------- 报表筛选条（日期 + 状态）
+   .search 是给「一个关键词输入框」设计的，塞进日期×2 + 下拉 + 按钮
+   就会在窄屏撑破页面 —— 这一条允许换行。 */
+.report-filter { flex-wrap: wrap; row-gap: 6px; }
+.report-filter input[type=date] { width: auto; min-width: 132px; }
+.report-filter select { width: auto; }
+@media (max-width: 780px) {
+  .report-filter { width: 100%; }
+  .report-filter input[type=date],
+  .report-filter select { flex: 1 1 128px; min-width: 0; }
+  .report-filter .btn { flex: 0 0 auto; }
+}
+
+/* ------------------------------------------------- 表头排序（点标题栏排序）
+   可排的列整格可点：锚点用负边距铺满 th，指哪儿点哪儿。
+   箭头是纯装饰，用 muted 色；当前排序列用主色标出来。 */
+table.grid thead th .sort-link {
+  display: flex; align-items: center; gap: 4px;
+  margin: -7px -10px; padding: 7px 10px;
+  color: inherit; font-weight: 600; text-decoration: none;
+}
+table.grid thead th.num .sort-link { justify-content: flex-end; }
+table.grid thead th .sort-link:hover { color: var(--primary); text-decoration: none; }
+table.grid thead th .sort-link .sort-ar {
+  font-size: 10px; line-height: 1; color: var(--text-mute);
+}
+table.grid thead th .sort-link.is-on { color: var(--primary); }
+table.grid thead th .sort-link.is-on .sort-ar { color: var(--primary); }
+@media print {
+  table.grid thead th .sort-link .sort-ar { display: none; }
+}
+
+/* ------------------------------------------------- 发票 PDF 拖拽导入
+   拖放区：默认虚线框，拖进来时整块变蓝。卡片态尽量扁，别顶掉列表。 */
+.dropzone-wrap { margin: 0 0 12px; }
+.dropzone {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 14px 16px; border: 1.5px dashed #b9cdf0; border-radius: var(--radius);
+  background: var(--primary-soft); transition: background .15s, border-color .15s;
+  cursor: pointer;
+}
+.dropzone.is-over { background: #dfeaff; border-color: var(--primary); }
+.dropzone .dz-badge {
+  flex: 0 0 auto; padding: 6px 10px; border-radius: 6px; font-size: 12px;
+  font-weight: 600; letter-spacing: .5px; color: #fff; background: var(--primary);
+}
+.dropzone .dz-text { flex: 1 1 320px; min-width: 0; display: flex;
+  flex-direction: column; gap: 2px; }
+.dropzone .dz-text b { font-size: 14px; }
+.dropzone .dz-text span { font-size: 12.5px; line-height: 1.5; }
+.dropzone .dz-btns { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.dropzone .dz-hint { font-size: 12px; }
+@media (max-width: 780px) {
+  .dropzone { padding: 12px; gap: 10px; }
+  .dropzone .dz-btns { width: 100%; }
+  .dropzone .dz-btns .btn { flex: 1 1 auto; }
+  .dropzone .dz-hint { flex: 1 1 100%; }
+}
+
+/* 确认页顶部的导入面板：进度 + 告警 + 就新建往来单位 */
+.import-panel {
+  border: 1px solid #cfe1f5; border-left: 3px solid var(--primary);
+  border-radius: var(--radius); background: #f7fbff;
+  padding: 12px 14px; margin: 0 0 12px;
+}
+.import-panel .ip-head {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.import-panel .ip-head b { font-size: 14px; }
+.import-panel .ip-actions { margin-left: auto; display: flex; align-items: center;
+  gap: 6px; flex-wrap: wrap; }
+.import-panel .ip-sub { margin-top: 4px; word-break: break-all; }
+.import-panel .ip-line { margin-top: 6px; font-size: 13px; }
+.import-panel .ip-err { color: var(--danger); }
+.import-panel .ip-warn { color: var(--warn); }
+.import-panel .ip-warn-inline { color: var(--warn); }
+.import-panel .ip-warns { margin: 6px 0 0; padding-left: 20px; color: var(--warn);
+  font-size: 13px; }
+.import-panel .ip-add { display: inline-flex; align-items: center; gap: 6px;
+  flex-wrap: wrap; margin-left: 4px; }
+.import-panel .ip-tax { height: 30px; font-size: 13px; min-width: 190px; }
+.import-panel .ip-items { margin-top: 6px; font-size: 13px; }
+.import-panel .ip-items summary { cursor: pointer; color: var(--primary); }
+.import-panel .ip-item-list { margin-top: 4px; padding: 8px 10px; background: #fff;
+  border: 1px solid var(--line-soft); border-radius: 6px; line-height: 1.7;
+  word-break: break-all; }
+.import-panel .hint { margin: 8px 0 0; }
+
+/* --------------------------------------- 发票「对应的费用支出」面板（第 12 轮）
+   一行读完：单号 / 金额 / 支付状态 / 类别 / 对应清单项。 */
+.cost-panel .cost-grid {
+  display: grid; gap: 10px 18px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin-top: 8px;
+}
+.cost-panel .cost-grid > div { display: flex; flex-direction: column; gap: 3px;
+  min-width: 0; }
+.cost-panel .cost-grid > div > span { font-size: 12px; color: var(--text-soft); }
+.cost-panel .cost-grid select { width: 100%; max-width: 260px; }
+.cost-panel .cost-item-cell { grid-column: 1 / -1; }
+.cost-panel .cost-paid { color: var(--ok); }
+.cost-panel .hint { margin: 10px 0 0; }
+
+/* 首页：没有收入合同、收入按发票/收款兜底的项目，名字后面那个 ✳ */
+.fb-mark { color: #b06f00; font-size: 12px; margin-left: 2px; cursor: help; }
+
+/* ------------------------------------------------- 记工（点工 / 临时工） */
+/* 月表：31 列要窄，格子只放 1 / 0.5 */
+table.grid.sheet th.day, table.grid.sheet td.day {
+  width: 26px; padding: 6px 2px; text-align: center;
+  font-size: 12px; color: var(--text-soft);
+}
+/* 月表格子：点一下就记工，所以要有"能点"的样子 */
+table.grid.sheet td.cell { cursor: pointer; user-select: none; -webkit-user-select: none; }
+table.grid.sheet td.cell:hover { background: #eef6ff; box-shadow: inset 0 0 0 1px #b5d4f4; }
+table.grid.sheet td.cell:active { background: #dbeafe; }
+table.grid.sheet td.cell.sel { background: #b5d4f4 !important; color: #042c53; }
+table.grid.sheet td.day.has { background: #eaf3de; color: #27500a; font-weight: 500; }
+/* 这天工价跟默认不一样（比如 450）→ 橙色，一眼看得出来 */
+table.grid.sheet td.day.diff { background: #faeeda; color: #854f0b; }
+/* 按「第二工资」记的一整天（格子里显示 2）→ 蓝色，跟手工改价（橙）分开 */
+table.grid.sheet td.day.alt { background: #e6f1fb; color: #0c447c; }
+table.grid.sheet td.day.alt.diff { background: #e6f1fb; color: #0c447c; }
+table.grid.sheet th.who, table.grid.sheet td.who { width: 78px; white-space: nowrap; }
+table.grid.sheet th.trade, table.grid.sheet td.trade {
+  width: 64px; font-size: 12px; color: var(--text-mute); white-space: nowrap;
+}
+table.grid.sheet tfoot td { background: #f7f9fb; font-weight: 600; }
+.sheet-foot { display: flex; gap: 24px; margin-top: 14px; font-size: 13px;
+  color: var(--text-soft); flex-wrap: wrap; }
+
+/* 批量记工 */
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px 16px; }
+.form-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.form-grid label > span { color: var(--text-soft); font-size: 12.5px; }
+.form-grid input, .form-grid select { width: 100%; }
+.pick-head { display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+.pick-head h3 { font-size: 14px; margin: 0; }
+.pick-tools { display: flex; align-items: center; gap: 8px; }
+.worker-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 6px 10px; }
+.wp-item { display: flex; align-items: baseline; gap: 6px; padding: 6px 8px;
+  border: 1px solid var(--line-soft); border-radius: 6px; font-size: 13px; cursor: pointer; }
+.wp-item:hover { background: #fafcfe; }
+.wp-name { font-weight: 500; }
+.wp-meta { color: var(--text-mute); font-size: 12px; margin-left: auto; }
+
+/* 用户管理 → 页面权限：一行里并排三个单选项 */
+.perm-choice { display: inline-flex; align-items: center; gap: 5px; margin-right: 14px;
+  font-size: 13.5px; white-space: nowrap; cursor: pointer; }
+.perm-choice input { margin: 0; }
+.perm-group td { background: #f7f9fb; font-weight: 600; }
+@media print {
+  .sheet-foot { margin-top: 18px; }
+}

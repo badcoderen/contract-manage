@@ -1,0 +1,21 @@
+# 数据与运行产物：不进版本库
+data/
+*.db
+*.db-wal
+*.db-shm
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 机密：.env 只留在服务器上
+.env
+
+# 历史手工备份文件
+*.bak
+*.bak2
+*.bak3
+*.bak.*
+
+# 日志
+*.log

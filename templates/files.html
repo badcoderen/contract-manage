@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}{{ ent.title if ent else '合同' }}原件 · {{ app_title }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h2 class="page-title">{{ ent.title if ent else '合同' }}原件
+    <span class="muted">/ {{ row.code or row.no or row['id'] }}</span></h2>
+  <div class="page-actions">
+    <a class="btn btn-ghost"
+       href="{{ url_for('entity_edit', key=key or 'contracts', rid=row['id']) }}">返回单据</a>
+    <a class="btn btn-ghost"
+       href="{{ url_for('entity_list', key=key or 'contracts') }}">返回列表</a>
+  </div>
+</div>
+
+<div class="note">
+  单据：<b>{{ row.code or row.no or row['id'] }}</b> {{ row.name or '' }}
+  {% if row.project_name %}（{{ row.project_name }}）{% endif %}
+  ｜ 金额 {{ money(row.amount_gross) }} ｜ 状态 {{ row.status or '—' }}
+</div>
+
+<section class="panel">
+  <h3>上传新附件</h3>
+  <form method="post" enctype="multipart/form-data" class="upload">
+    <input type="file" name="files" multiple
+           accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.bmp,.tif,.tiff,.txt,.zip,.rar,.7z,.dwg">
+    <button class="btn btn-primary" type="submit">上传</button>
+    <div class="hint">支持 PDF / Word / Excel / PPT / 图片 / 压缩包等，单个文件不超过 {{ max_mb }} MB，可一次选多个。</div>
+  </form>
+</section>
+
+<section class="panel">
+  <h3>已归档原件（{{ files|length }}）</h3>
+  <div class="table-wrap">
+  <table class="grid">
+    <thead><tr><th>文件名</th><th>大小</th><th>上传时间</th><th>上传人</th><th class="ops-col">操作</th></tr></thead>
+    <tbody>
+    {% for a in files %}
+      <tr>
+        <td><a href="{{ url_for('file_view', aid=a['id']) }}" target="_blank">{{ a.orig_name }}</a></td>
+        <td>{{ human_size(a.size) }}</td>
+        <td>{{ a.uploaded_at }}</td>
+        <td>{{ a.uploader or '' }}</td>
+        <td class="ops-col">
+          <a class="btn btn-sm" href="{{ url_for('file_view', aid=a['id']) }}" target="_blank">打开</a>
+          <a class="btn btn-sm" href="{{ url_for('file_download', aid=a['id']) }}">下载</a>
+          {% if is_approver %}
+            <form method="post" action="{{ url_for('file_delete', aid=a['id']) }}" class="inline"
+                  onsubmit="return confirm('确认删除这个附件？');">
+              <button class="btn btn-sm btn-danger" type="submit">删除</button>
+            </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5" class="empty">还没有上传合同原件</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="muted small">文件保存在数据卷的 uploads 目录中，随数据库一起备份即可；点击文件名可直接在线预览（PDF 与图片），其他格式走下载。</p>
+</section>
+{% endblock %}

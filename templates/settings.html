@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}参数设置 · {{ app_title }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h2 class="page-title">参数设置</h2>
+  <div class="page-actions">
+    <a class="btn" href="{{ url_for('payroll') }}">查看工资测算</a>
+  </div>
+</div>
+<div class="note">
+  这里只保存数字与标准，改动后「工资与补贴测算」会立即按新参数重算，不影响任何已录入的数据。
+</div>
+
+<form method="post" class="form">
+  <div class="field-grid">
+    {% for it in items %}
+      <div class="field">
+        <label for="s_{{ it.key }}">{{ it.label or it.key }}</label>
+        <input type="text" id="s_{{ it.key }}" name="{{ it.key }}"
+               value="{{ it.value if it.value is not none else '' }}">
+        <div class="hint">{{ it.memo or '' }}</div>
+      </div>
+    {% endfor %}
+  </div>
+  <div class="form-actions">
+    <button class="btn btn-primary" type="submit">保存</button>
+    <a class="btn" href="{{ url_for('index') }}">返回</a>
+  </div>
+</form>
+
+<section class="panel" style="margin-top:16px">
+  <h3>当前生效值（模板里可直接调用的变量名）</h3>
+  <div class="kv">
+    <div><span>默认月工资</span><b>{{ money(params.salary_default) }}</b></div>
+    <div><span>月计薪天数</span><b>{{ params.monthly_days | num }}</b> 天</div>
+    <div><span>每日工时</span><b>{{ params.hours_per_day | num }}</b> 小时</div>
+    <div><span>加班倍数（周一至周六）</span><b>{{ params.ot_rate_weekday | num }}</b></div>
+    <div><span>加班倍数（周日）</span><b>{{ params.ot_rate_weekend | num }}</b></div>
+    <div><span>加班倍数（法定节假日）</span><b>{{ params.ot_rate_holiday | num }}</b></div>
+    <div><span>请假扣款倍数</span><b>{{ params.leave_deduct_rate | num }}</b></div>
+    <div><span>出差补贴/天</span><b>{{ money(params.trip_allowance_per_day) }}</b></div>
+    <div><span>不出差餐补/天</span><b>{{ money(params.meal_office_per_day) }}</b></div>
+    <div><span>出差餐补/天</span><b>{{ money(params.meal_trip_per_day) }}</b></div>
+    <div><span>高温补贴月份 / 金额</span><b>{{ params.heat_months | sort | join('、') }} 月 ·
+      {{ money(params.heat_allow_per_month) }} 元/人/月</b></div>
+    <div><span>福利金月份</span><b>{{ params.welfare_months | join('、') or '未设置' }}</b></div>
+    <div><span>出差费口径</span><b>{{ '日工资 × 天数' if params.trip_pay_mode == 'daily'
+      else '固定 ' ~ money(params.trip_allowance_per_day) ~ ' 元/天' }}</b></div>
+    <div><span>养老 / 医疗 / 失业（个人）</span>
+      <b>{{ params.pension_rate | num }} / {{ params.medical_rate | num }} / {{ params.unemploy_rate | num }}</b></div>
+    <div><span>大病补充（定额）</span><b>{{ money(params.serious_ill_fixed) }}</b></div>
+    <div><span>个税起征点（月）</span><b>{{ money(params.tax_threshold) }}</b></div>
+  </div>
+  <p class="hint">
+    日工资 = 基础工资 ÷ <b>当月计薪天数</b>（「周一至周六」− 法定假日 + 调休上班日，
+    不含加班）；小时工资 = 日工资 ÷ 每日工时。
+    加班费 = 加班时数 × 小时工资 × 倍数；出差费 = 出差天数 × 日工资（或固定金额）；
+    餐补 =（计薪天数 + 加班满一天的整天数）× 平日餐补 + 出差/出海天数 × 出差餐补。
+    <br>跨年时把新一年的<b>法定节假日</b>与<b>调休上班日</b>贴进上面两个参数即可。
+  </p>
+</section>
+
+<section class="panel" style="margin-top:16px">
+  <h3>系统信息</h3>
+  <div class="kv">
+    <div><span>系统版本</span><b>v{{ app_version }}（正式版）</b></div>
+    <div><span>发布日期</span><b>{{ release_date }}</b></div>
+    <div><span>数据库</span><b>SQLite · data/app.db</b></div>
+    <div><span>运行方式</span><b>Docker 容器 · Python + waitress</b></div>
+  </div>
+  <p class="hint">
+    升级按 README「五、数据、备份与升级」走：先做一次数据备份，再
+    <code>docker compose up -d --build</code>；数据库用增量迁移（只加列 / 只加表），
+    不会清空已录入的数据。
+  </p>
+</section>
+{% endblock %}

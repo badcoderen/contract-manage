@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block title %}对私利润汇总 · {{ app_title }}{% endblock %}
+
+{% macro money_table(title, rows, note, count_label="单据数", foot_n=None) %}
+<section class="panel">
+  <div class="sub-head">
+    <h3>{{ title }}</h3>
+    {% if note %}<span class="muted small">{{ note }}</span>{% endif %}
+  </div>
+  <div class="table-wrap">
+    <table class="grid">
+      <thead>
+        <tr><th>名称</th>
+            <th class="num">{{ count_label }}</th>
+            <th class="num">收入</th>
+            <th class="num">我方利润</th>
+            <th class="num">成本</th>
+            <th class="num">返还居间人</th></tr>
+      </thead>
+      <tbody>
+      {% for r in rows %}
+        <tr>
+          <td>{{ r.name }}</td>
+          <td class="num">{{ r.n }}</td>
+          <td class="num">{{ money(r.income) }}</td>
+          <td class="num">{{ money(r.profit) }}</td>
+          <td class="num">{{ money(r.cost) }}</td>
+          <td class="num"><b>{{ money(r.payable) }}</b></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="empty">没有数据</td></tr>
+      {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td>合计</td>
+          <td class="num">{{ p.totals.n if foot_n is none else foot_n }}</td>
+          <td class="num">{{ money(p.totals.income) }}</td>
+          <td class="num">{{ money(p.totals.profit) }}</td>
+          <td class="num">{{ money(p.totals.cost) }}</td>
+          <td class="num">{{ money(p.totals.payable) }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</section>
+{% endmacro %}
+
+{% block content %}
+<div class="page-head">
+  <h2 class="page-title">对私利润汇总</h2>
+  <div class="page-actions">
+    {# 报表筛选条：日期 + 状态 + 按钮，窄屏要能换行，不然会撑破页面 #}
+    <form class="search report-filter" method="get"
+          action="{{ url_for('profit_summary') }}">
+      <input type="date" name="from" value="{{ p.date_from }}" title="计算日期（起）">
+      <span class="muted small">至</span>
+      <input type="date" name="to" value="{{ p.date_to }}" title="计算日期（止）">
+      <select name="status">
+        <option value="">全部（不含已作废）</option>
+        {% for s in statuses %}
+          <option value="{{ s }}" {% if p.status == s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+      <button class="btn" type="submit">筛选</button>
+      {% if p.date_from or p.date_to or p.status %}
+        <a class="btn btn-ghost" href="{{ url_for('profit_summary') }}">清空</a>
+      {% endif %}
+    </form>
+    <a class="btn btn-primary"
+       href="{{ url_for('export_profit', **{'from': p.date_from, 'to': p.date_to, 'status': p.status}) }}">导出 Excel</a>
+  </div>
+</div>
+
+<div class="cards">
+  <div class="card">
+    <div class="card-label">收入合计</div>
+    <div class="card-value">{{ money(p.totals.income) }}</div>
+    <div class="card-foot">{{ p.totals.n }} 张对私计算单</div>
+  </div>
+  <div class="card card-hl">
+    <div class="card-label">我方利润合计（原「扣税」）</div>
+    <div class="card-value">{{ money(p.totals.profit) }}</div>
+    <div class="card-foot">＝ 各行 收入 × 扣税比例</div>
+  </div>
+  <div class="card">
+    <div class="card-label">成本合计</div>
+    <div class="card-value">{{ money(p.totals.cost) }}</div>
+    <div class="card-foot">明细里手工填的成本（含纯成本行）</div>
+  </div>
+  <div class="card card-hl">
+    <div class="card-label">返还居间人合计</div>
+    <div class="card-value">{{ money(p.totals.payable) }}</div>
+    <div class="card-foot">已付 {{ money(p.totals.paid) }} ／ 待付 {{ money(p.totals.unpaid) }}</div>
+  </div>
+</div>
+
+<div class="note">
+  口径：<b>收入 − 成本 − 我方利润 = 返还居间人</b>。
+  对私计算里的「扣税」是名义叫法，<b>实际就是我方利润</b>，所以这里直接按利润显示。
+  默认不含「已作废」的单据；按合同汇总时，一张单涉及多张合同的，金额按<b>明细行</b>拆到各合同，不重复计。
+</div>
+
+{{ money_table("按居间人汇总", p.by_broker, "谁该拿多少，一眼看清") }}
+{{ money_table("按合同汇总", p.by_contract, "同一张单涉及多张合同时，金额按明细行拆分（单据数会重复计入）",
+               count_label="涉及单据", foot_n="—") }}
+{{ money_table("按项目汇总", p.by_project, "项目口径的利润情况") }}
+
+<section class="panel">
+  <div class="sub-head">
+    <h3>逐单明细</h3>
+    <span class="muted small">共 {{ p.rows|length }} 张；点计算单号可打开</span>
+  </div>
+  <div class="table-wrap">
+    <table class="grid">
+      <thead>
+        <tr><th>计算单号</th><th>标题</th><th>日期</th><th>关联合同</th><th>项目</th>
+            <th>居间人</th><th>状态</th>
+            <th class="num">收入</th><th class="num">我方利润</th>
+            <th class="num">成本</th><th class="num">返还居间人</th></tr>
+      </thead>
+      <tbody>
+      {% for r in p.rows %}
+        <tr>
+          <td><a href="{{ url_for('entity_edit', key='private_settlements', rid=r.id) }}">{{ r.code }}</a></td>
+          <td>{{ r.title or '' }}</td>
+          <td>{{ r.calc_date or '' }}</td>
+          <td class="muted small">{{ r.contracts or '—' }}</td>
+          <td class="muted small">{{ r.project_name or '—' }}</td>
+          <td>{{ r.broker or '—' }}</td>
+          <td><span class="tag">{{ r.status or '' }}</span></td>
+          <td class="num">{{ money(r.income) }}</td>
+          <td class="num">{{ money(r.profit) }}</td>
+          <td class="num">{{ money(r.cost) }}</td>
+          <td class="num"><b>{{ money(r.payable) }}</b></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="11" class="empty">这段时间没有对私计算单</td></tr>
+      {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="7">合计</td>
+          <td class="num">{{ money(p.totals.income) }}</td>
+          <td class="num">{{ money(p.totals.profit) }}</td>
+          <td class="num">{{ money(p.totals.cost) }}</td>
+          <td class="num">{{ money(p.totals.payable) }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</section>
+{% endblock %}

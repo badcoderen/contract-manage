@@ -1,0 +1,31 @@
+{# 台账 / 报表 通用分页条
+   调用方需要先设好：endpoint（query_view / report_view）、lkey（台账 key）、
+   qtext（筛选词，报表页留空）、total / pages / page / per。
+   只影响屏幕上的这一页：打印与导出走的还是全量。 #}
+{% if total is defined and total is not none %}
+<div class="pager">
+  <span class="muted small">
+    共 {{ total }} 行{% if pages > 1 %} ｜ 第 {{ page }} / {{ pages }} 页
+    ｜ 打印与导出仍是全部 {{ total }} 行{% endif %}
+  </span>
+  {% if pages > 1 %}
+  <span class="muted small per-pick">每页
+    {%- for n in (100, 200, 500, 1000) %}
+      {%- if n == per %} <b>{{ n }}</b>{% else %}
+        <a href="{{ ledger_url(endpoint, lkey, qtext, page=1, per=n) }}">{{ n }}</a>{% endif %}
+      {%- if not loop.last %} ·{% endif %}
+    {%- endfor %} 行
+  </span>
+  <div class="pager-btns">
+    {% if page > 1 %}
+      <a class="btn btn-sm" href="{{ ledger_url(endpoint, lkey, qtext, page=1, per=per) }}">首页</a>
+      <a class="btn btn-sm" href="{{ ledger_url(endpoint, lkey, qtext, page=page-1, per=per) }}">上一页</a>
+    {% endif %}
+    {% if page < pages %}
+      <a class="btn btn-sm" href="{{ ledger_url(endpoint, lkey, qtext, page=page+1, per=per) }}">下一页</a>
+      <a class="btn btn-sm" href="{{ ledger_url(endpoint, lkey, qtext, page=pages, per=per) }}">末页</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endif %}

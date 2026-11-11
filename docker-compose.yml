@@ -1,0 +1,57 @@
+services:
+  contract-app:
+    build: .
+    # 正式版版本号：1.12（2026-11-11：调整≠定稿；本月工资定稿；密码解除定稿）
+    image: contract-app:1.12
+    container_name: contract-app
+    restart: unless-stopped
+    ports:
+      # 左侧是飞牛上的端口，被占用就改成别的（例如 18080:8080）
+      - "28324:8080"
+    # ★ 机密项（SECRET_KEY / ADMIN_PASS）不写在本文件里：本文件要进 git，
+    #   密钥放同目录 .env（权限 600，已在 .gitignore 中）。
+    #   新机器部署：cp .env.example .env 并把 SECRET_KEY 换成
+    #   `openssl rand -hex 24` 的输出，否则下面 ${SECRET_KEY} 会直接报错，防止裸奔上线。
+    environment:
+      TZ: Asia/Shanghai
+      # 仅在首次建库时创建管理员；该账号首次登录会被强制要求改密。
+      # 库已存在后改这里没有任何效果 —— 重置口令用 tools/reset_password.py
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASS: ${ADMIN_PASS:-}
+      FORCE_PASSWORD_CHANGE: "1"
+      # 登录会话签名（Flask SECRET_KEY）：务必随机，可用 openssl rand -hex 24 生成
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY not set - create .env first}
+      APP_TITLE: "工程合同・费用・发票管理系统"
+      # 版本号（显示在顶栏、登录页、参数设置 → 系统信息）
+      APP_VERSION: "1.12"
+      RELEASE_DATE: "2026-11-04"
+      # 使用单位名称：顶栏品牌位 / 登录页 / 首页横幅 / 报表表头表尾
+      COMPANY_NAME: "示例公司"
+      # 登录防护
+      SESSION_TIMEOUT_MIN: "120"
+      LOGIN_MAX_FAILS: "5"
+      LOGIN_LOCK_MIN: "15"
+      MAX_UPLOAD_MB: "64"
+      # 反代（Caddy）用这个自定义头传真实客户端 IP；不设则回退到
+      # X-Forwarded-For 末段（Caddy 2.7+ 默认会丢弃该头，所以必须用自定义头）
+      IP_HEADER: "X-Real-Client-IP"
+      # 反代在自己的内网，允许采信它传来的客户端 IP
+      TRUST_PROXY: "1"
+      # 若通过 HTTPS 反向代理发布，把下面这行打开
+      # SESSION_COOKIE_SECURE: "1"
+      # ---- 数据备份（「系统管理 → 数据备份」页）----
+      # 允许写入的备份根目录（容器内路径），必须与下面的 volumes 对应
+      BACKUP_ROOTS: "/backup"
+      # 一键备份的默认目录
+      BACKUP_DIR: "/backup/contract-app"
+      # 同一目录里最多留几份（超出的自动删最旧的）
+      BACKUP_KEEP: "14"
+    volumes:
+      # 数据库与附件都在这个目录，备份它即可
+      - ./data:/data
+      # 备份目录：宿主上的真实路径 → 容器里的 /backup
+      # 放存储空间1 上、且不在应用目录里，重装/换容器时备份不会被一起删掉。
+      # 想备到别的盘（如存储空间2）再加一行并把 BACKUP_ROOTS 一起加上：
+      #   - /vol2/backup:/backup-vol2
+      #   BACKUP_ROOTS: "/backup,/backup-vol2"
+      - /vol1/1000/backup:/backup

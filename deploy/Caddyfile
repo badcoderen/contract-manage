@@ -1,0 +1,61 @@
+# 工程合同・费用・发票管理系统 —— Caddy 反向代理 + 自动 HTTPS
+#
+# 用法：把 contract.example.com 换成你自己的域名（需解析到你的公网 IP，
+# 并在路由器/防火墙上把 80、443 转发到飞牛），然后：
+#     docker compose -f deploy/docker-compose.proxy.yml up -d
+# Caddy 会自动申请并续期 Let's Encrypt 证书，无需手工搞证书。
+
+{
+    email you@example.com
+}
+
+contract.example.com {
+    encode gzip
+
+    # 反向代理到 app 容器（app 与 caddy 在同一个 compose 网络里）
+    reverse_proxy contract-app:8080 {
+        # 让后端能拿到真实客户端 IP（这样按 IP 的登录锁定才准）
+        header_up X-Real-IP {remote_host}
+    }
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy same-origin
+        # 不暴露服务端软件信息
+        -Server
+    }
+
+    # 请求体上限要 >= 应用里的 MAX_UPLOAD_MB，否则大附件传不上去
+    request_body {
+        max_size 80MB
+    }
+
+    # 访问日志（排查爆破时很有用）
+    log {
+        output file /var/log/caddy/contract.log
+        format json
+    }
+}
+
+# ---------------------------------------------------------------------------
+# 可选一：只允许固定网段访问（把后面的 IP 换成你公司/家里固定的出口 IP）
+# contract.example.com {
+#     @blocked not remote_ip 1.2.3.0/24 5.6.7.8/32
+#     respond @blocked "Forbidden" 403
+#     reverse_proxy contract-app:8080
+# }
+#
+# 可选二：再加一层网关口令（与系统登录是两个独立密码，多一道门）
+# （basic_auth 需要先生成口令：docker run --rm caddy caddy hash-password --plaintext 你的口令）
+# contract.example.com {
+#     basic_auth {
+#         gateway $2a$14$替换成上面生成的口令哈希
+#     }
+#     reverse_proxy contract-app:8080
+# }
+#
+# 可选三：登录接口限速（需要带 caddy-ratelimit 插件的 Caddy 镜像）
+#     @login path /login
+#     rate_limit @login 10r/m
